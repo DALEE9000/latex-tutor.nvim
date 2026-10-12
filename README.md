@@ -34,6 +34,7 @@ localleader is Space in this config.
 | `␣ca` | `:Tutor pdf` | Toggle the TeXpresso annotations |
 | `␣cx` | `:Tutor cancel` | Cancel a running review |
 | `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
+| `␣cq` | `:Tutor hide` / `:Tutor show` | Hide everything (sidebar, card, highlights, PDF badges) without losing comments. A review, `␣co`, `␣cn`/`␣cp` or `␣ck` brings it back |
 | | `:Tutor clear` | Drop every comment for this file |
 
 In the sidebar: `<CR>` jump · `r` resolve · `R` reply · `dd` delete ·

@@ -31,10 +31,39 @@ function M.refresh(buf)
   if panel.is_open() and panel.src == buf then panel.render() end
   pdf.sync_soon(buf)
   store.save_soon(buf)
-  if ui.card.id then
+  if ui.card.id and not store.hidden then
     local c = store.get(buf).comments[ui.card.id]
     if c and api.nvim_get_current_buf() == buf then ui.show_card(c, true) else ui.close_card() end
   end
+end
+
+-- Hide / show ---------------------------------------------------------------
+
+-- Close the panel and card and take every mark out of nvim and TeXpresso.
+-- Comments are kept (extmarks still follow your edits); show() brings them back.
+function M.set_hidden(hidden)
+  if store.hidden == hidden then return end
+  store.hidden = hidden
+  if hidden then
+    panel.close()
+    ui.close_card()
+  end
+  for b in pairs(store.bufs) do
+    if api.nvim_buf_is_valid(b) then
+      if hidden then ui.set_active(b, nil) end
+      ui.render(b)
+      pdf.sync(b)
+    end
+  end
+end
+
+function M.show() M.set_hidden(false) end
+
+function M.toggle_hidden()
+  M.set_hidden(not store.hidden)
+  local p = config.get().keymaps
+  local key = (p.prefix .. (p.hide or "")):gsub("<localleader>", vim.g.maplocalleader == " " and "Space " or (vim.g.maplocalleader or "\\"))
+  notify(store.hidden and ("Tutor hidden (" .. key .. " or :Tutor show brings it back)") or "Tutor shown")
 end
 
 -- Review ------------------------------------------------------------------
@@ -54,6 +83,7 @@ function M.review(buf, unit)
     if ok ~= 1 then return end
   end
   store.load(buf)
+  M.show()
   local root = prompt.project_root(file)
   local prefs_path, prefs = prompt.find_prefs(file)
   if not prefs then
@@ -112,7 +142,7 @@ function M.review(buf, unit)
     while #st.summaries > 30 do table.remove(st.summaries, 1) end
 
     panel.src = buf
-    if cfg.panel.auto_open and not panel.is_open() then panel.open(buf) end
+    if cfg.panel.auto_open and not panel.is_open() and not store.hidden then panel.open(buf) end
     M.refresh(buf)
 
     local parts = {}
@@ -149,6 +179,7 @@ local function source_win(buf)
 end
 
 function M.jump(buf, c, focus)
+  M.show()
   local win = source_win(buf)
   if not win then return end
   store.sync(buf)
@@ -259,7 +290,7 @@ local function on_cursor()
   cursor_timer = vim.defer_fn(function()
     cursor_timer = nil
     local buf = api.nvim_get_current_buf()
-    if not is_tex(buf) or not store.bufs[buf] then return end
+    if store.hidden or not is_tex(buf) or not store.bufs[buf] then return end
     local _, c = cursor_comment()
     ui.set_active(buf, c)
     if panel.is_open() then
@@ -289,10 +320,10 @@ local function keymaps(buf)
     M.review(buf, scope.range(buf, a, b))
   end, "review selection")
   map("n", k.review_file, function() M.review(buf, scope.file(buf)) end, "review whole file")
-  map("n", k.panel, function() panel.toggle(buf) end, "toggle comment panel")
+  map("n", k.panel, function() M.show(); panel.toggle(buf) end, "toggle comment panel")
   map("n", k.next, function() M.next(1) end, "next comment")
   map("n", k.prev, function() M.next(-1) end, "previous comment")
-  map("n", k.card, with_cursor_comment(function(_, c) ui.show_card(c, true) end), "show comment")
+  map("n", k.card, with_cursor_comment(function(_, c) M.show(); ui.show_card(c, true) end), "show comment")
   map("n", k.resolve, with_cursor_comment(M.toggle_resolve), "resolve comment")
   map("n", k.reply, with_cursor_comment(M.reply), "reply to comment")
   map("n", k.delete, with_cursor_comment(M.delete), "delete comment")
@@ -300,6 +331,7 @@ local function keymaps(buf)
     notify("TeXpresso annotations " .. (pdf.toggle(buf) and "on" or "off"))
   end, "toggle PDF annotations")
   map("n", k.cancel, function() M.cancel(buf) end, "cancel review")
+  map("n", k.hide, M.toggle_hidden, "hide / show everything")
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
 end
@@ -370,7 +402,9 @@ function M.setup(opts)
       M.review(buf, scope.file(buf))
     elseif what == "" or what == "exercise" then
       M.review(buf, scope.unit_at(buf, api.nvim_win_get_cursor(0)[1]))
-    elseif what == "panel" then panel.toggle(buf)
+    elseif what == "panel" then M.show(); panel.toggle(buf)
+    elseif what == "hide" then if not store.hidden then M.toggle_hidden() end
+    elseif what == "show" then if store.hidden then M.toggle_hidden() end
     elseif what == "next" then M.next(1)
     elseif what == "prev" then M.next(-1)
     elseif what == "cancel" then M.cancel(buf)
@@ -385,7 +419,7 @@ function M.setup(opts)
     end
   end, {
     nargs = "?", range = true,
-    complete = function() return { "exercise", "file", "panel", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
+    complete = function() return { "exercise", "file", "panel", "hide", "show", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
     desc = "latex-tutor",
   })
 

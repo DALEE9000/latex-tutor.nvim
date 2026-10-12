@@ -47,6 +47,7 @@ M.defaults = {
     pdf = "a",
     cancel = "x",
     prefs = "e",
+    hide = "q",            -- hide / show everything (comments are kept)
   },
 
   panel = { width = 54, auto_open = true },

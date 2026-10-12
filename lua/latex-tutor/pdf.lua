@@ -229,7 +229,7 @@ function M.sync(buf)
 
   local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
   local desired = {} -- row0 -> text
-  if M.is_enabled() then
+  if M.is_enabled() and not store.hidden then
     local notes = config.get().texpresso.margin_notes
     local def, macro = notes and DEF_NOTES or DEF_PLAIN, notes and "\\tutormarkN" or "\\tutormarkB"
     local safe = scan(lines)
@@ -335,7 +335,7 @@ end
 -- Synctex jump so the PDF shows the commented line.
 function M.reveal(buf, row0)
   local t = tx()
-  if t and t.is_running() and config.get().texpresso.sync_on_jump then
+  if t and t.is_running() and config.get().texpresso.sync_on_jump and not store.hidden then
     t.send("synctex-forward", api.nvim_buf_get_name(buf), row0 + 1)
   end
 end

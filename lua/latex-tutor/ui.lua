@@ -47,7 +47,9 @@ function M.render(buf)
     local col = math.min(c.col, start_len)
     local end_col = math.min(c.end_col, end_len)
     if end_row == row and end_col < col then end_col = col end
-    local o = {
+    local o = store.hidden and {
+      end_row = end_row, end_col = end_col, right_gravity = false, end_right_gravity = true, strict = false,
+    } or {
       end_row = end_row,
       end_col = end_col,
       hl_group = c.resolved and "LatexTutorResolved" or g,
@@ -59,7 +61,7 @@ function M.render(buf)
       sign_hl_group = c.resolved and "LatexTutorDim" or (g .. "Sign"),
       strict = false,
     }
-    if cfg.virtual_text and not c.resolved then
+    if cfg.virtual_text and not c.resolved and not store.hidden then
       o.virt_text = { { " " .. c.n .. " ", g .. "Badge" }, { " " .. c.title, g .. "Virt" } }
       o.virt_text_pos = "eol"
     end

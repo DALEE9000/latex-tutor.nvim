@@ -8,6 +8,8 @@ local M = {}
 
 M.ns = api.nvim_create_namespace("latex_tutor")
 M.bufs = {}
+-- `:Tutor hide`: every display is off, but extmarks keep tracking edits.
+M.hidden = false
 
 local function resolve_buf(buf)
   if not buf or buf == 0 then return api.nvim_get_current_buf() end
