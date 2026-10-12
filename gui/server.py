@@ -360,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
             ms = int((self.path.split("ms=")[1:] or ["0"])[0] or 0)
             time.sleep(min(ms, 30000) / 1000)
             return self.send(200, b"GIF89a\x01\x00\x01\x00\x00\x00\x00;", "image/gif")
+        if path == "/math":  # the last Σ answer (snapshot mode)
+            return self.send(200, json.dumps(last.get("math") or {}).encode(), "application/json")
         if path == "/progress":  # the last report nvim sent (snapshot mode)
             return self.send(200, json.dumps({"md": last.get("progress") or ""}).encode(), "application/json")
         if path == "/state":
@@ -413,6 +415,10 @@ def read_nvim(engine):
                 state.clear()
                 state.update(msg)
             threading.Thread(target=publish, daemon=True).start()
+        elif kind == "math":
+            msg["macros"] = macros_for(msg.get("root"))
+            last["math"] = msg
+            broadcast("math", msg)
         elif kind == "progress":
             last["progress"] = msg.get("md") or ""
             broadcast("progress", {"md": last["progress"]})

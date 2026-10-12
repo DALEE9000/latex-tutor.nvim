@@ -599,6 +599,7 @@ function connect() {
   const es = new EventSource("/events");
   es.addEventListener("state", (e) => apply(JSON.parse(e.data)));
   es.addEventListener("progress", (e) => openReport(JSON.parse(e.data).md));
+  es.addEventListener("math", (e) => openMath(JSON.parse(e.data)));
   es.addEventListener("build", () => { if (S.pdf) { S.pdf.building = true; renderStatus(); } });
   es.onerror = () => showStatus("Disconnected — is nvim still running?", "error");
   // nvim quit: close this window. A browser may refuse for a tab it didn't
@@ -634,6 +635,8 @@ scroller.addEventListener("wheel", (e) => {
   });
 }, { passive: false });
 $("#report-close").addEventListener("click", () => closeReport());
+$("#math-close").addEventListener("click", () => closeMath());
+$("#mathview").addEventListener("click", (e) => { if (e.target.id === "mathview") closeMath(); });
 $("#report").addEventListener("click", (e) => { if (e.target.id === "report") closeReport(); });
 $("#picker").addEventListener("change", (e) => post("jump_line", { line: +e.target.value }));
 $("#sheet-toggle").addEventListener("click", () => { margin.classList.toggle("closed"); renderMargin(); });
@@ -656,12 +659,56 @@ function openReport(text) {
   $("#report-close").focus();
 }
 
+/* ---- Σ evaluate / derive answers ----------------------------------------- */
+
+function tex(s, display) {
+  try {
+    return katex.renderToString(s || "", { displayMode: display, throwOnError: false, strict: false,
+      macros: Object.assign({}, S.macros || {}, mathMacros) });
+  } catch { return `<code>${esc(s || "")}</code>`; }
+}
+let mathMacros = {};
+
+function openMath(m) {
+  const o = m.out || {};
+  mathMacros = m.macros || {};
+  const steps = (o.steps || []).map((s) =>
+    `<li><div class="m-step">${tex(s.math, true)}</div>${s.note ? `<div class="m-note">${md(s.note)}</div>` : ""}</li>`).join("");
+  $("#math-body").innerHTML = `
+    <h1>Σ ${esc(m.ask || "Evaluate")}</h1>
+    <div class="m-src">${tex(m.text, true)}</div>
+    <div class="m-result"><span class="m-eq">=</span>${tex(o.result, true)}</div>
+    ${steps ? `<h2>Steps</h2><ol class="m-steps">${steps}</ol>` : ""}
+    <h2>Check</h2><div class="m-check">${md(o.check || "")} <span class="chip m-conf">${esc(o.confidence || "")} confidence</span></div>
+    ${o.caveat ? `<div class="m-caveat">${md(o.caveat)}</div>` : ""}
+    <h2>LaTeX to insert</h2>
+    <pre class="m-latex">${esc(o.latex || "")}</pre>
+    <div class="m-actions">
+      <button class="btn primary" id="math-insert">Insert below line ${m.line}</button>
+      <button class="btn" id="math-copy">Copy LaTeX</button>
+    </div>`;
+  $("#math-insert").addEventListener("click", () => { post("math_insert"); closeMath(); });
+  $("#math-copy").addEventListener("click", async (ev) => {
+    try { await navigator.clipboard.writeText(o.latex || ""); ev.target.textContent = "Copied"; }
+    catch { ev.target.textContent = "Copy failed: select the text above"; }
+  });
+  $("#mathview").hidden = false;
+  document.body.classList.add("report-open");
+  $("#math-body").scrollTop = 0;
+}
+
+function closeMath() {
+  $("#mathview").hidden = true;
+  if ($("#report").hidden) document.body.classList.remove("report-open");
+}
+
 function closeReport() {
   $("#report").hidden = true;
   document.body.classList.remove("report-open");
 }
 
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#mathview").hidden) { closeMath(); e.preventDefault(); return; }
   if (e.key === "Escape" && !$("#report").hidden) { closeReport(); e.preventDefault(); return; }
   if (e.ctrlKey || e.metaKey) {
     if (e.key === "=" || e.key === "+") { stepZoom(1); e.preventDefault(); }
@@ -671,7 +718,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.target.closest("textarea, input, select")) return;
   if (e.key === "p" || e.key === "P") { post("progress"); e.preventDefault(); return; }
-  if (!$("#report").hidden) return;
+  if (!$("#report").hidden || !$("#mathview").hidden) return;
   const list = S.comments || [];
   const i = list.findIndex((c) => c.id === S.active);
   if (e.key === "j" || e.key === "J") { const c = list[Math.min(list.length - 1, i + 1)]; if (c) activate(c.id, true); }
@@ -716,6 +763,9 @@ if (new URLSearchParams(location.search).has("snapshot")) {
   hold.src = "/delay?ms=" + (new URLSearchParams(location.search).get("snapshot") || "6000");
   document.body.append(hold);
   fetch("/state").then((r) => r.json()).then(apply);
+  if (new URLSearchParams(location.search).has("math")) {
+    fetch("/math").then((r) => r.json()).then((m) => m.out && openMath(m));
+  }
   if (new URLSearchParams(location.search).has("report")) {
     fetch("/progress").then((r) => r.json()).then((d) => d.md && openReport(d.md));
   }

@@ -22,7 +22,8 @@ function M.cancel(key)
   return false
 end
 
--- opts: key, prompt (sent on stdin), system, schema, cwd, resume (session id)
+-- opts: key, prompt (sent on stdin), system, schema, cwd, resume (session id),
+--       model / effort (override the config for this call)
 -- on_done(err, structured, session_id)
 function M.run(opts, on_done)
   local cfg = config.get()
@@ -40,8 +41,9 @@ function M.run(opts, on_done)
   if #cfg.tools > 0 then
     vim.list_extend(cmd, { "--allowedTools", table.concat(cfg.tools, ",") })
   end
-  if cfg.model then vim.list_extend(cmd, { "--model", cfg.model }) end
-  if cfg.effort then vim.list_extend(cmd, { "--effort", cfg.effort }) end
+  local model, effort = opts.model or cfg.model, opts.effort or cfg.effort
+  if model then vim.list_extend(cmd, { "--model", model }) end
+  if effort then vim.list_extend(cmd, { "--effort", effort }) end
   if opts.resume then vim.list_extend(cmd, { "--resume", opts.resume }) end
   if opts.system then vim.list_extend(cmd, { "--append-system-prompt", opts.system }) end
 

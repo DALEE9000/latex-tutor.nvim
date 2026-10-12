@@ -348,6 +348,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | 🧭 | `␣cn` / `␣cp` | `:Tutor next` / `prev` | Next / previous comment |
 | | `␣ck` | | Show the comment under the cursor |
 | ✅ | `␣cv` | `:Tutor check` | **Check my fixes**: the tutor re-reads your edits |
+| Σ | `␣cm` | `:Tutor math` | **Evaluate / derive** the selection (visual) or current line; asks what you want, answers with steps, a check and LaTeX to insert |
 | | `␣cr` | | Resolve / reopen a comment |
 | | `␣cR` | | Reply to a comment (<kbd>Ctrl</kbd>+<kbd>s</kbd> sends) |
 | | `␣cd` | | Delete a comment |
@@ -383,6 +384,29 @@ when that line is off-screen, so it doesn't fight your own scrolling.
 <kbd>r</kbd> resolve · <kbd>R</kbd> reply · <kbd>dd</kbd> delete ·
 <kbd>J</kbd>/<kbd>K</kbd> next/prev · <kbd>v</kbd> check fixes ·
 <kbd>a</kbd> all questions · <kbd>?</kbd> help · <kbd>q</kbd> close
+
+<br>
+
+## Σ Evaluate and derive
+
+Select a sum, an integral or an expression (visual mode), press `␣cm`, and
+say what you want, or press Enter to evaluate or simplify. Examples:
+*closed form*, *integrate by parts*, *derivative w.r.t. t*, *simplify assuming a > 0*.
+
+You get back:
+* **the result** and **the key steps**, rendered;
+* **a check**: the tutor verifies independently (differentiates its
+  antiderivative, tries small n, substitutes a number) and says how;
+* **conditions** such as convergence or domain;
+* **LaTeX to insert**, in your document's style and macros. It continues your
+  `align*` and doesn't rewrite your text.
+
+The answer appears in the Tutor window when it's open, with **Insert below
+line N** and **Copy LaTeX** buttons. Otherwise it appears in a float in nvim:
+`i` inserts, `y` copies, `q` closes. Inserting is one undo step.
+
+It uses Sonnet by default, which takes about 5–10 s. For harder derivations,
+set `math = { model = "opus" }`. Like reviews, it runs on your subscription.
 
 <br>
 
@@ -508,6 +532,8 @@ require("latex-tutor").setup({
     cancel = "x", prefs = "e", hide = "q", progress = "s", check = "v", gui = "g",
   },
 
+  math = { model = "sonnet", effort = nil },   -- Σ evaluate / derive; "opus" for harder ones
+
   gui = {
     python = "python3",
     port = 0,                   -- 0 = any free port
@@ -627,6 +653,7 @@ lua/latex-tutor/
   gui.lua       Tutor window: server lifecycle, state, actions
   pdf.lua       TeXpresso annotation bridge
   progress.lua  private progress log and report
+  math.lua      Σ evaluate / derive the selection
 gui/
   server.py     local HTTP + SSE server, pdflatex + SyncTeX
   live.py       live preview: warm TeX spares, error-safe swaps

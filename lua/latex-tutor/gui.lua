@@ -159,6 +159,14 @@ function M.show_progress()
   return true
 end
 
+-- A Σ answer (math.lua), shown over the PDF with Insert / Copy buttons.
+function M.show_math(r)
+  if not M.running() or r.buf ~= M.buf then return false end
+  send({ type = "math", ask = r.ask, text = r.text, line = r.e, out = r.out,
+    root = require("latex-tutor.prompt").project_root(api.nvim_buf_get_name(r.buf)) })
+  return true
+end
+
 -- Follow the .tex buffer you switch to.
 function M.follow(buf)
   if not M.running() or buf == M.buf then return end
@@ -206,6 +214,7 @@ local function act(msg)
     T.refresh(buf)
   elseif a == "jump_line" and tonumber(msg.line) then T.jump_line(buf, tonumber(msg.line))
   elseif a == "progress" then M.show_progress()
+  elseif a == "math_insert" then require("latex-tutor.math").insert()
   end
 end
 

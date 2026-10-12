@@ -54,9 +54,13 @@ M.defaults = {
     progress = "s",        -- progress report
     check = "v",           -- ask the tutor whether your edits fix the open comments
     gui = "g",             -- open the Tutor window (PDF + comment cards)
+    math = "m",            -- evaluate / derive the selection (or current line)
   },
 
   panel = { width = 54, auto_open = true }, -- auto_open is skipped while the GUI window is open
+  -- Σ evaluate / derive (Space c m). Sonnet answers in a few seconds; set
+  -- model = "opus" for harder derivations.
+  math = { model = "sonnet", effort = nil },
   gui = {
     python = "python3",
     port = 0,              -- 0 = any free port

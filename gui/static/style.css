@@ -371,3 +371,27 @@ body.report-open .zoom { display: none; }
   .spacer { display: none; }
   .actions { margin-left: auto; }
 }
+
+/* ---- Σ answers ---- */
+.m-src { color: var(--text-2); padding: 4px 0 2px; overflow-x: auto; }
+.m-result {
+  display: flex; align-items: center; gap: 12px; overflow-x: auto;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 12px; padding: 6px 18px; margin: 10px 0 4px; font-size: 1.15em;
+}
+.m-eq { font-size: 1.4em; color: var(--accent); font-weight: 600; }
+.m-steps { padding-left: 22px; margin: 0; }
+.m-steps li { margin: 4px 0 10px; }
+.m-step { overflow-x: auto; }
+.m-step .katex-display { margin: .3em 0; text-align: left; }
+.m-note { color: var(--text-2); font-size: 13.5px; }
+.m-check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.m-check p { margin: 0; }
+.m-caveat { margin-top: 10px; padding: 8px 12px; border-left: 3px solid var(--improve); background: var(--surface-2); border-radius: 6px; }
+.m-latex {
+  font: 13px/1.5 "JetBrains Mono", ui-monospace, monospace; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: pre;
+}
+.m-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.m-step .katex-display > .katex, .m-src .katex-display > .katex { text-align: left; }
+.m-steps li::marker { color: var(--text-2); font-weight: 600; }
