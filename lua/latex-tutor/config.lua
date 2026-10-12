@@ -64,6 +64,7 @@ M.defaults = {
     window_size = "1440,920",
     live = true,           -- rebuild from your unsaved text as you type (false = on save only)
     live_delay = 150,      -- ms after you stop typing
+    auto_open = false,     -- open the window when you open a main .tex file
     open_on_review = true, -- Space c c also opens the window (false = terminal sidebar only)
     open_cmd = nil,        -- override: a command list (URL appended) or function(url)
   },

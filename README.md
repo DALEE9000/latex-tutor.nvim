@@ -129,60 +129,156 @@ numbered badges in its preview. It's optional: the window has its own live previ
 <tr><th></th><th>What</th><th>Version</th><th>Check it</th><th>Needed for</th></tr>
 <tr><td>✅</td><td><b>Neovim</b></td><td>≥ 0.10 (tested 0.11.4)</td><td><code>nvim --version</code></td><td>everything</td></tr>
 <tr><td>✅</td><td><b>Claude Code CLI</b>, signed in with a <b>Pro or Max</b> plan</td><td>≥ 2.1 (tested 2.1.296)</td><td><code>claude auth status</code> → <code>"authMethod": "claude.ai"</code></td><td>the reviews</td></tr>
-<tr><td>✅</td><td>A Unix shell with <code>env</code> (Linux, macOS or <b>WSL2</b>)</td><td>any</td><td><code>env --version</code></td><td>launching the reviewer</td></tr>
-<tr><td>🪟</td><td><b>Python 3</b>, standard library only</td><td>≥ 3.8</td><td><code>python3 --version</code></td><td>the Tutor window</td></tr>
-<tr><td>🪟</td><td><b>pdflatex</b> and <b>synctex</b> (any TeX Live or MacTeX)</td><td>TeX Live ≥ 2020</td><td><code>pdflatex --version</code>, <code>synctex help</code></td><td>the PDF in the window</td></tr>
-<tr><td>🪟</td><td>A Chromium browser: <b>Edge</b> (Windows, used automatically on WSL), Chrome or Chromium</td><td>any recent</td><td></td><td>the window itself</td></tr>
-<tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in TeXpresso's own preview (optional; the window already previews live)</td></tr>
+<tr><td>✅</td><td>Linux, macOS or <b>WSL2</b> (a Unix shell with <code>env</code>)</td><td>any</td><td><code>env --version</code></td><td>launching the reviewer</td></tr>
+<tr><td>🪟</td><td><b>Python 3</b>, standard library only (nothing to <code>pip install</code>)</td><td>≥ 3.8</td><td><code>python3 --version</code></td><td>the Tutor window</td></tr>
+<tr><td>🪟</td><td><b>TeX Live</b> or <b>MacTeX</b>, which provide <code>pdflatex</code> and <code>synctex</code></td><td>TeX Live ≥ 2020</td><td><code>pdflatex --version</code> and <code>synctex help</code></td><td>the PDF and live preview</td></tr>
+<tr><td>🪟</td><td>A browser. A Chromium one (<b>Edge</b>, Chrome, Chromium) gives a chromeless app window</td><td>any recent</td><td></td><td>showing the window</td></tr>
 <tr><td>➕</td><td>A plugin manager, e.g. <a href="https://github.com/folke/lazy.nvim">lazy.nvim</a></td><td>any</td><td><code>:Lazy</code></td><td>installing (or use <code>runtimepath</code>)</td></tr>
+<tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in TeXpresso's own preview. <b>Not needed:</b> the window has its own live preview</td></tr>
 </table>
 
 <sub>✅ required · 🪟 required for the Tutor window · ➕ optional</sub>
 
-> [!IMPORTANT]
-> **Your documents must compile with `pdflatex`** for the window to show them.
-> They're built into `~/.cache/latex-tutor/build/` and never next to your
-> files, so any `build/` folder you use is untouched. If you use XeLaTeX or
-> LuaLaTeX, set `gui = { engine = "xelatex" }`. The live preview works with
-> all three.
+No API key, no `pip`, no `npm` packages and no build step. pdf.js, KaTeX and
+marked are bundled in `gui/static/vendor/`, so the window works offline.
 
-<details>
-<summary><b>Installing the dependencies</b> (Ubuntu / WSL2 · macOS)</summary>
+> [!IMPORTANT]
+> **Your documents must compile with `pdflatex`** (or set
+> `gui = { engine = "xelatex" }` / `"lualatex"`). They're built into
+> `~/.cache/latex-tutor/build/` and never next to your files, so any `build/`
+> folder you use is untouched.
 
 <br>
 
-**Neovim ≥ 0.10.** Ubuntu's apt package is usually too old. Use the official
-release:
+## 📦 Install
+
+Each step ends with a command that checks it worked.
+
+### 1. Neovim ≥ 0.10
+
+Ubuntu's `apt` package is usually too old, so use the official release:
 
 ```bash
 # Ubuntu / WSL2
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
-echo 'export PATH="/opt/nvim-linux-x86_64/bin:$PATH"' >> ~/.bashrc
+echo 'export PATH="/opt/nvim-linux-x86_64/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 
 # macOS
 brew install neovim
 ```
 
-**Claude Code**, then sign in with your Claude account. Choose the
-**Claude.ai subscription** option, not an API key:
+✔ `nvim --version` prints `NVIM v0.10` or newer.
+
+### 2. Claude Code, signed in with your subscription
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash   # or: npm install -g @anthropic-ai/claude-code
-claude                                            # sign in once, then /exit
-claude auth status                                # must say "authMethod": "claude.ai"
+claude                                            # sign in once, then type /exit
 ```
 
-**TeX with SyncTeX** (`synctex` comes with TeX Live):
+When it asks how to sign in, choose **Claude account with subscription**, not
+an API key.
+
+✔ `claude auth status` shows `"authMethod": "claude.ai"`.
+
+### 3. TeX Live (pdflatex + synctex) and Python 3
 
 ```bash
-sudo apt install texlive-latex-extra texlive-science   # Ubuntu / WSL2: pdflatex + synctex + common packages
-brew install --cask mactex-no-gui                       # macOS
+# Ubuntu / WSL2: the common packages (~1 GB)
+sudo apt install texlive-latex-extra texlive-science texlive-pictures python3
+# ...or everything, if your documents use unusual packages (~5 GB)
+sudo apt install texlive-full
+
+# macOS (Python 3 ships with the Xcode command-line tools)
+brew install --cask mactex-no-gui
 ```
 
-**Python 3:** already present on Ubuntu and macOS (`python3 --version`).
+✔ `pdflatex --version`, `synctex help` and `python3 --version` all work, and
+`pdflatex yourfile.tex` compiles one of your documents from its folder.
 
-**TeXpresso (optional):** follow the
+### 4. The plugin
+
+**lazy.nvim:** create this file.
+
+```lua
+-- ~/.config/nvim/lua/plugins/latex-tutor.lua
+return {
+  "DALEE9000/latex-tutor.nvim",
+  ft = "tex",
+  config = function()
+    require("latex-tutor").setup({
+      model = "opus",               -- or "sonnet" to use less of your plan's quota
+      gui = { auto_open = true },   -- open the Tutor window with every main .tex file
+    })
+  end,
+}
+```
+
+<details>
+<summary>Without a plugin manager (a plain <code>git clone</code>)</summary>
+
+```bash
+git clone https://github.com/DALEE9000/latex-tutor.nvim ~/latex-tutor.nvim
+```
+
+```lua
+-- in ~/.config/nvim/init.lua
+vim.opt.runtimepath:prepend(vim.fn.expand("~/latex-tutor.nvim"))
+require("latex-tutor").setup({ gui = { auto_open = true } })
+```
+
+</details>
+
+**Set localleader**, if you haven't. Every key is `<localleader>c…`, and this
+README writes it as `␣c…`, assuming localleader is Space. Put this in
+`init.lua` **before** lazy.nvim loads:
+
+```lua
+vim.g.maplocalleader = " "
+```
+
+✔ Open a `.tex` file that has `\begin{document}`. The Tutor window opens and
+shows your PDF (or press `␣cg`). `:Tutor` with no argument reviews the
+exercise under your cursor; that uses your plan, so this check doesn't need it.
+
+### 5. Your tutoring preferences (optional but recommended)
+
+```bash
+mkdir -p ~/.config/latex-tutor
+cp ~/.local/share/nvim/lazy/latex-tutor.nvim/examples/TUTOR.md ~/.config/latex-tutor/TUTOR.md
+```
+
+Then edit it, or press `␣ce` inside nvim. A `TUTOR.md` in a project folder
+overrides the global one for files under it: the nearest one walking up from
+the `.tex` file wins.
+
+### 6. The window's browser (only if the default doesn't suit you)
+
+| You're on | What opens by default |
+|---|---|
+| **WSL2** | an Edge app window on the Windows side (WSL forwards `127.0.0.1`) |
+| **macOS** | your default browser (`open`) |
+| **Linux** | your default browser (`xdg-open`) |
+
+For a chromeless app window on macOS or Linux, point it at Chrome or Chromium:
+
+```lua
+gui = {
+  open_cmd = function(url)
+    vim.system({ "chromium", "--app=" .. url, "--window-size=1440,920" }, { detach = true })
+  end,
+},
+```
+
+<details>
+<summary><b>TeXpresso (optional)</b></summary>
+
+<br>
+
+You don't need it: the Tutor window already previews as you type. If you use
+TeXpresso anyway, the plugin also draws numbered comment badges in its
+preview. Follow the
 [TeXpresso build guide](https://github.com/let-def/texpresso#building), then
 install the `let-def/texpresso.vim` plugin. On **WSL2**, the viewer needs
 software rendering or its window stays blank:
@@ -193,63 +289,19 @@ require("texpresso").env = { SDL_RENDER_DRIVER = "software", LIBGL_ALWAYS_SOFTWA
 
 </details>
 
-<br>
+### Update / rebuild
 
-## 📦 Install
-
-**lazy.nvim:**
-
-```lua
--- ~/.config/nvim/lua/plugins/latex-tutor.lua
-return {
-  "DALEE9000/latex-tutor.nvim",
-  ft = "tex",
-  config = function()
-    require("latex-tutor").setup({
-      model = "opus", -- or "sonnet" to use less of your plan's quota
-    })
-  end,
-}
-```
-
-<details>
-<summary>Local clone / no plugin manager</summary>
-
-```lua
--- in init.lua
-vim.opt.runtimepath:prepend(vim.fn.expand("~/latex-tutor.nvim"))
-require("latex-tutor").setup({})
-```
-
-</details>
-
-**Set localleader** if you haven't. Every key below is `<localleader>c…`, and
-this README writes it as `␣c…`, assuming localleader is Space:
-
-```lua
-vim.g.maplocalleader = " "   -- before lazy.nvim loads
-```
-
-**Write your tutoring preferences.** Copy the example and edit it:
-
-```bash
-mkdir -p ~/.config/latex-tutor
-cp ~/.local/share/nvim/lazy/latex-tutor.nvim/examples/TUTOR.md ~/.config/latex-tutor/TUTOR.md
-```
-
-A `TUTOR.md` in a project folder overrides the global one for files under it.
-The nearest one walking up from the `.tex` file wins.
-
-**Update / rebuild:** there is no build step. Run `:Lazy update latex-tutor.nvim`,
-or after editing a local clone, `:Lazy reload latex-tutor.nvim` (or restart nvim).
+There is no build step. Run `:Lazy update latex-tutor.nvim`. After editing a
+local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 
 <br>
 
 ## 🚀 Quick start
 
 1. **Open a solution:** `nvim chapter5.tex`.
-2. **Open the Tutor window:** <kbd>Space</kbd> <kbd>c</kbd> <kbd>g</kbd>. It
-   builds your PDF, which takes a few seconds the first time.
+2. **Open the Tutor window:** <kbd>Space</kbd> <kbd>c</kbd> <kbd>g</kbd>, or
+   it opens by itself with `gui.auto_open`. The first build takes a few
+   seconds; after that it updates as you type.
 3. **Put your cursor in an exercise and review it:** <kbd>Space</kbd> <kbd>c</kbd> <kbd>c</kbd>.
    A review takes 30–90 s, and you can keep working meanwhile.
 4. **Read the comments.** Click a card, or press <kbd>Space</kbd> <kbd>c</kbd> <kbd>n</kbd>
@@ -451,6 +503,7 @@ require("latex-tutor").setup({
     engine = "pdflatex",        -- or "xelatex" / "lualatex"
     live = true,                -- rebuild from unsaved text as you type (false = on save)
     live_delay = 150,           -- ms after you stop typing
+    auto_open = false,          -- open the window when you open a main .tex file
     window_size = "1440,920",
     open_on_review = true,      -- reviewing (Space c c) also opens the window
     open_cmd = nil,             -- { "firefox" } or function(url) … end to override

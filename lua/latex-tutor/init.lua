@@ -488,6 +488,16 @@ function M.attach(buf)
   })
   -- Give TeXpresso time to open the file before the first annotation push.
   pdf.sync_soon(buf, 1500)
+  -- gui.auto_open: start the window with the first main file you open (one
+  -- with \begin{document}); after that it follows the buffer you're in.
+  if config.get().gui.auto_open then
+    vim.schedule(function()
+      if gui.running() or gui.job or not api.nvim_buf_is_valid(buf) then return end
+      for _, l in ipairs(api.nvim_buf_get_lines(buf, 0, 400, false)) do
+        if l:match("^%s*\\begin{document}") then return gui.open(buf) end
+      end
+    end)
+  end
 end
 
 function M.setup(opts)
