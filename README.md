@@ -17,8 +17,25 @@ per token.
 
 ## Commands and keys
 
-Keys are buffer-local in `.tex` buffers. The prefix is `<localleader>c`, and
-localleader is Space in this config.
+### How to press the keys
+
+- `␣` means the **Space bar**. `␣cc` is three keys pressed one after
+  another: **Space**, then **c**, then **c**. Don't hold them together.
+- Press them in **normal mode**. If you're typing (insert mode), press
+  **Esc** first.
+- Press them within about a second of each other. If you pause too long,
+  Space acts on its own and moves the cursor one character.
+- Don't type `_` instead of Space. In Vim, `_ce` deletes the first word of
+  the line. If that happens, press **Esc**, then **u** to undo.
+- Every key also has a typed form, shown in the Command column. Type it
+  and press **Enter**, for example `:Tutor` then Enter. Use that if the key
+  sequence feels fiddly.
+- The keys only work in `.tex` files. The sidebar has its own one-letter
+  keys, listed below the table; press `?` in the sidebar to see them.
+- `<C-s>` means hold **Ctrl** and press **s**. `<CR>` means **Enter**.
+
+The keys are defined only in `.tex` buffers. The prefix is `<localleader>c`,
+and localleader is Space in this config.
 
 | Key | Command | What |
 |---|---|---|
@@ -35,6 +52,7 @@ localleader is Space in this config.
 | `␣cx` | `:Tutor cancel` | Cancel a running review |
 | `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
 | `␣cq` | `:Tutor hide` / `:Tutor show` | Hide everything (sidebar, card, highlights, PDF badges) without losing comments. A review, `␣co`, `␣cn`/`␣cp` or `␣ck` brings it back |
+| `␣cs` | `:Tutor progress` | Open your progress report (`q` closes it) |
 | | `:Tutor clear` | Drop every comment for this file |
 
 In the sidebar: `<CR>` jump · `r` resolve · `R` reply · `dd` delete ·
@@ -59,6 +77,42 @@ can keep editing; comments are re-anchored by the text they quote.
 
 If the PDF breaks, press `␣ca`, which sends every line back clean. If nothing
 happens, run `:messages`.
+
+## Progress tracking (private)
+
+Every review and every resolved comment is logged to
+`~/.local/share/nvim/latex-tutor/progress.jsonl`. Press `␣cs` (or run
+`:Tutor progress`) to turn the log into a report. It's shown in a split and
+saved as `~/.local/share/nvim/latex-tutor/progress.md`. The report covers:
+
+- **Overall:** the number of reviews, and a score on each exercise's latest
+  review. It uses the same scale as the self-study record: correct 1,
+  minor 0.8, incomplete 0.5, major issues 0. It also counts comments by
+  severity and how many you resolved.
+- **By manual and by chapter:** the score, the mix of verdicts, and the
+  number of error and rigor comments.
+- **Week by week:** reviews, average score, and errors and rigor comments
+  per review.
+- **Changed on re-review:** exercises whose verdict changed after you fixed
+  them and reviewed them again.
+- **Recent errors and rigor issues you fixed:** the patterns that keep
+  coming back.
+
+This data is private because it lives outside every git repo. Your manuals
+are public GitHub repos, and a log kept inside them could be committed by
+mistake even with a `.gitignore`, for example by `git add -f`. A folder
+outside every repo can't be committed at all. The plugin's own `.gitignore`
+also excludes `progress*` as a backstop.
+
+Two private files can still end up in a repo:
+
+- **A per-manual `TUTOR.md`.** If you put one inside a manual's repo, keep it
+  out of git by adding it to `.git/info/exclude` in that repo. That file is a
+  local-only ignore list that never gets pushed.
+- **Saved comments.** They live in `~/.local/state/nvim/latex-tutor/`, which
+  is also outside every repo.
+
+To start over, delete `progress.jsonl`.
 
 ## Tutoring preferences (`TUTOR.md`)
 
@@ -138,4 +192,15 @@ lua/latex-tutor/
   ui.lua       highlights, signs, card, spinner, reply composer
   panel.lua    sidebar
   pdf.lua      TeXpresso annotation bridge
+  progress.lua private progress log + report
 ```
+
+## Where things are saved
+
+| What | Where | In git? |
+|---|---|---|
+| Plugin code | `~/latex-tutor.nvim/` | Local repo only (not pushed) |
+| Plugin loader | `~/.config/nvim/lua/plugins/latex-tutor.lua` | |
+| Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
+| Comments per file | `~/.local/state/nvim/latex-tutor/*.json` | No |
+| Progress log / report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |

@@ -63,17 +63,17 @@ function M.unit_at(buf, row1)
     or lines[e]:match("^%s*\\end{document}")) do
     e = e - 1
   end
-  return { s = s, e = e, label = label_for(lines, s, e) }
+  return { s = s, e = e, label = label_for(lines, s, e), kind = "exercise" }
 end
 
 function M.range(buf, s, e)
   local lines = api.nvim_buf_get_lines(buf, s - 1, e, false)
-  return { s = s, e = e, label = label_for(lines, 1, #lines):gsub("^lines .*", string.format("lines %d–%d", s, e)) }
+  return { s = s, e = e, label = label_for(lines, 1, #lines):gsub("^lines .*", string.format("lines %d–%d", s, e)), kind = "range" }
 end
 
 function M.file(buf)
   local n = api.nvim_buf_line_count(buf)
-  return { s = 1, e = n, label = vim.fn.fnamemodify(api.nvim_buf_get_name(buf), ":t") }
+  return { s = 1, e = n, label = vim.fn.fnamemodify(api.nvim_buf_get_name(buf), ":t"), kind = "file" }
 end
 
 return M

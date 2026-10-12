@@ -48,6 +48,7 @@ M.defaults = {
     cancel = "x",
     prefs = "e",
     hide = "q",            -- hide / show everything (comments are kept)
+    progress = "s",        -- progress report
   },
 
   panel = { width = 54, auto_open = true },

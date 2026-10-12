@@ -11,6 +11,7 @@ local pdf = require("latex-tutor.pdf")
 local prompt = require("latex-tutor.prompt")
 local claude = require("latex-tutor.claude")
 local scope = require("latex-tutor.scope")
+local progress = require("latex-tutor.progress")
 
 local M = {}
 
@@ -140,6 +141,7 @@ function M.review(buf, unit)
       label = unit.label, verdict = out.verdict, summary = out.summary, at = os.time(), session = session,
     })
     while #st.summaries > 30 do table.remove(st.summaries, 1) end
+    pcall(progress.record_review, file, unit, out)
 
     panel.src = buf
     if cfg.panel.auto_open and not panel.is_open() and not store.hidden then panel.open(buf) end
@@ -194,6 +196,7 @@ end
 
 function M.toggle_resolve(buf, c)
   c.resolved = not c.resolved
+  if c.resolved then pcall(progress.record_resolve, api.nvim_buf_get_name(buf), c, "you") end
   M.refresh(buf)
 end
 
@@ -235,6 +238,7 @@ function M.reply(buf, c)
           c.session = session or c.session
           if out.resolved and config.get().auto_resolve then
             c.resolved = true
+            pcall(progress.record_resolve, file, c, "tutor")
             notify(string.format("#%d resolved by the tutor", c.n))
           end
         end
@@ -332,6 +336,7 @@ local function keymaps(buf)
   end, "toggle PDF annotations")
   map("n", k.cancel, function() M.cancel(buf) end, "cancel review")
   map("n", k.hide, M.toggle_hidden, "hide / show everything")
+  map("n", k.progress, progress.open, "progress report")
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
 end
@@ -403,6 +408,7 @@ function M.setup(opts)
     elseif what == "" or what == "exercise" then
       M.review(buf, scope.unit_at(buf, api.nvim_win_get_cursor(0)[1]))
     elseif what == "panel" then M.show(); panel.toggle(buf)
+    elseif what == "progress" then progress.open()
     elseif what == "hide" then if not store.hidden then M.toggle_hidden() end
     elseif what == "show" then if store.hidden then M.toggle_hidden() end
     elseif what == "next" then M.next(1)
@@ -419,7 +425,7 @@ function M.setup(opts)
     end
   end, {
     nargs = "?", range = true,
-    complete = function() return { "exercise", "file", "panel", "hide", "show", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
+    complete = function() return { "exercise", "file", "panel", "hide", "show", "progress", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
     desc = "latex-tutor",
   })
 
