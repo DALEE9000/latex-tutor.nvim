@@ -469,6 +469,7 @@ local function keymaps(buf)
   map("n", k.check, function() M.check(buf) end, "check my fixes")
   map("n", k.gui, function() gui.open(buf) end, "open the Tutor window")
   map("n", k.math, function() require("latex-tutor.math").ask(buf, false) end, "evaluate / derive this line")
+  map("n", k.model, function() require("latex-tutor.models").pick("review") end, "choose the AI / model")
   map("x", k.math, function() require("latex-tutor.math").ask(buf, true) end, "evaluate / derive the selection")
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
@@ -509,6 +510,7 @@ end
 
 function M.setup(opts)
   config.setup(opts)
+  require("latex-tutor.models").apply()  -- a model picked with :Tutor model wins
   ui.highlights()
   panel.set_actions(M)
   pdf.hook()
@@ -562,7 +564,7 @@ function M.setup(opts)
   })
 
   local subcommands = { "exercise", "file", "panel", "gui", "check", "hide", "show", "progress",
-    "next", "prev", "cancel", "pdf", "prefs", "clear", "math" }
+    "next", "prev", "cancel", "pdf", "prefs", "clear", "math", "model", "model math" }
   local function run(o)
     local buf = api.nvim_get_current_buf()
     local what = o.args
@@ -583,6 +585,8 @@ function M.setup(opts)
     elseif what == "cancel" then M.cancel(buf)
     elseif what == "pdf" then notify("TeXpresso annotations " .. (pdf.toggle(buf) and "on" or "off"))
     elseif what == "prefs" then vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf)))))
+    elseif what == "model" or what == "model math" then
+      require("latex-tutor.models").pick(what == "model math" and "math" or "review")
     elseif what == "math" then
       if o.range > 0 then
         api.nvim_win_set_cursor(0, { o.line1, 0 })

@@ -55,9 +55,14 @@ M.defaults = {
     check = "v",           -- ask the tutor whether your edits fix the open comments
     gui = "g",             -- open the Tutor window (PDF + comment cards)
     math = "m",            -- evaluate / derive the selection (or current line)
+    model = "M",           -- choose the AI / model (also :Tutor model)
   },
 
   panel = { width = 54, auto_open = true }, -- auto_open is skipped while the GUI window is open
+  -- Which CLI answers: "claude" (Claude Code, your Claude plan) or "codex"
+  -- (OpenAI Codex CLI, your ChatGPT plan). Space c M switches at runtime.
+  backend = "claude",
+  codex = { cmd = "codex", model = nil, math_model = nil, effort = nil },
   -- Σ evaluate / derive (Space c m). Sonnet answers in a few seconds; set
   -- model = "opus" for harder derivations.
   math = { model = "sonnet", effort = nil },

@@ -171,7 +171,8 @@ function M.ask(buf, visual, ask_text)
       system = SYSTEM,
       schema = M.schema,
       cwd = prompt.project_root(api.nvim_buf_get_name(buf)),
-      model = cfg.model, effort = cfg.effort,
+      model = require("latex-tutor.models").math_model(),
+      effort = config.get().backend ~= "codex" and cfg.effort or nil,
     }, function(err, out)
       ui.task_stop(key)
       if err then return notify(err, vim.log.levels.ERROR) end

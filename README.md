@@ -133,6 +133,7 @@ numbered badges in its preview. It's optional: the window has its own live previ
 <tr><td>🪟</td><td><b>Python 3</b>, standard library only (nothing to <code>pip install</code>)</td><td>≥ 3.8</td><td><code>python3 --version</code></td><td>the Tutor window</td></tr>
 <tr><td>🪟</td><td><b>TeX Live</b> or <b>MacTeX</b>, which provide <code>pdflatex</code> and <code>synctex</code></td><td>TeX Live ≥ 2020</td><td><code>pdflatex --version</code> and <code>synctex help</code></td><td>the PDF and live preview</td></tr>
 <tr><td>🪟</td><td>A browser. A Chromium one (<b>Edge</b>, Chrome, Chromium) gives a chromeless app window</td><td>any recent</td><td></td><td>showing the window</td></tr>
+<tr><td>➕</td><td><a href="https://github.com/openai/codex">OpenAI Codex CLI</a>, signed in with ChatGPT (<code>codex login</code>)</td><td>any recent</td><td><code>codex --version</code></td><td>using Codex instead of Claude (<code>␣cM</code>)</td></tr>
 <tr><td>➕</td><td>A plugin manager, e.g. <a href="https://github.com/folke/lazy.nvim">lazy.nvim</a></td><td>any</td><td><code>:Lazy</code></td><td>installing (or use <code>runtimepath</code>)</td></tr>
 <tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in TeXpresso's own preview. <b>Not needed:</b> the window has its own live preview</td></tr>
 </table>
@@ -348,6 +349,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | 🧭 | `␣cn` / `␣cp` | `:Tutor next` / `prev` | Next / previous comment |
 | | `␣ck` | | Show the comment under the cursor |
 | ✅ | `␣cv` | `:Tutor check` | **Check my fixes**: the tutor re-reads your edits |
+| 🤖 | `␣cM` | `:Tutor model` | **Choose the AI**: Claude Opus / Sonnet / Haiku / any model id, or Codex. `:Tutor model math` picks the Σ model |
 | Σ | `␣cm` | `:Tutor math` | **Evaluate / derive** the selection (visual) or current line; asks what you want, answers with steps, a check and LaTeX to insert |
 | | `␣cr` | | Resolve / reopen a comment |
 | | `␣cR` | | Reply to a comment (<kbd>Ctrl</kbd>+<kbd>s</kbd> sends) |
@@ -407,6 +409,32 @@ line N** and **Copy LaTeX** buttons. Otherwise it appears in a float in nvim:
 
 It uses Sonnet by default, which takes about 5–10 s. For harder derivations,
 set `math = { model = "opus" }`. Like reviews, it runs on your subscription.
+
+<br>
+
+## 🤖 Choosing the AI
+
+Press `␣cM` (or run `:Tutor model`) and pick one:
+
+| Choice | Runs on | Good for |
+|---|---|---|
+| **Claude · Opus** (default for reviews) | Claude Code, your Claude Pro/Max plan | the most careful reviews |
+| **Claude · Sonnet** (default for Σ) | the same | faster reviews; quick Σ answers |
+| **Claude · Haiku** | the same | the fastest; lighter checks |
+| **Claude · another model id** | the same | any `claude --model` alias or full id |
+| **Codex** (its default, or a model you name) | [OpenAI Codex CLI](https://github.com/openai/codex), your ChatGPT plan | if you use ChatGPT rather than Claude |
+
+The choice is saved (in `~/.local/state/nvim/latex-tutor/settings.json`), so
+it survives restarts and overrides `setup()` until you pick again. The Tutor
+window shows the current one next to the file name. `:Tutor model math` sets
+the Σ model separately. Reviews and Σ always use the same backend.
+
+**Codex setup:** `npm install -g @openai/codex`, then `codex login` and choose
+**Sign in with ChatGPT**. The plugin runs it as `codex exec --sandbox read-only`,
+so it can read your project but never write to it. It removes `OPENAI_API_KEY`
+from Codex's environment, so a stray key can't switch it to metered API billing.
+Codex doesn't resume conversations; replies send the whole thread instead, so
+nothing is lost.
 
 <br>
 
@@ -530,8 +558,11 @@ require("latex-tutor").setup({
     review = "c", review_file = "f", panel = "o", next = "n", prev = "p",
     card = "k", resolve = "r", reply = "R", delete = "d", pdf = "a",
     cancel = "x", prefs = "e", hide = "q", progress = "s", check = "v", gui = "g",
+    math = "m", model = "M",
   },
 
+  backend = "claude",           -- or "codex"; ␣cM switches at runtime
+  codex = { cmd = "codex", model = nil, math_model = nil, effort = nil },
   math = { model = "sonnet", effort = nil },   -- Σ evaluate / derive; "opus" for harder ones
 
   gui = {
@@ -654,6 +685,8 @@ lua/latex-tutor/
   pdf.lua       TeXpresso annotation bridge
   progress.lua  private progress log and report
   math.lua      Σ evaluate / derive the selection
+  models.lua    choosing the AI / model (saved choice)
+  codex.lua     OpenAI Codex CLI backend
 gui/
   server.py     local HTTP + SSE server, pdflatex + SyncTeX
   live.py       live preview: warm TeX spares, error-safe swaps

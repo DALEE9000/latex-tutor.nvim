@@ -91,6 +91,7 @@ function M.state(buf)
     name = vim.fn.fnamemodify(file, ":t"),
     root = require("latex-tutor.prompt").project_root(file),
     focus = f.label and { label = f.label, s = f.s, e = f.e } or nil,
+    model = require("latex-tutor.models").label(),
     -- the line you're on, so the window can keep it in view as you type
     cursor = api.nvim_get_current_buf() == buf and api.nvim_win_get_cursor(0)[1] or nil,
     show_all = st.show_all or false,

@@ -395,3 +395,10 @@ body.report-open .zoom { display: none; }
 .m-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .m-step .katex-display > .katex, .m-src .katex-display > .katex { text-align: left; }
 .m-steps li::marker { color: var(--text-2); font-weight: 600; }
+
+.model {
+  font-size: 11.5px; color: var(--text-2); white-space: nowrap;
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; background: var(--surface-2);
+}
+.model:empty { display: none; }
+@media (max-width: 560px) { .model { display: none; } }

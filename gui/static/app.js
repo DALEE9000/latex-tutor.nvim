@@ -503,6 +503,7 @@ function scrollToActive(force) {
 function renderBar() {
   $("#file").textContent = S.name || "—";
   $("#file").title = S.file || "";
+  $("#model").textContent = S.model || "";
   const picker = $("#picker");
   const qs = S.questions || [];
   picker.innerHTML = qs.map((q) => {

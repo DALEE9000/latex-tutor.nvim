@@ -27,6 +27,9 @@ end
 -- on_done(err, structured, session_id)
 function M.run(opts, on_done)
   local cfg = config.get()
+  if cfg.backend == "codex" then
+    return require("latex-tutor.codex").run(opts, on_done, M.jobs)
+  end
   if vim.fn.executable(cfg.claude_cmd) == 0 then
     on_done("`" .. cfg.claude_cmd .. "` not found on PATH")
     return
