@@ -3,7 +3,8 @@
 
 Neovim starts this process and talks to it over stdin/stdout (JSON lines):
   nvim -> server: {"type": "state", ...}   comments for the focused question
-                  {"type": "compile", "file": ...}
+                  {"type": "compile", "file": ...}           on save
+                  {"type": "live", "file", "lines", "s", "e"} unsaved text (live.py)
   server -> nvim: {"type": "ready", "port": N}
                   {"type": "action", "action": ..., ...}   button clicks
 
@@ -31,6 +32,9 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import live as livebuild  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "latex-tutor" / "build"
@@ -42,6 +46,27 @@ clients = []          # list of queue.Queue for SSE
 last = {"state": None}  # last published state (GET /state)
 box_cache = {}        # (pdf_version, line) -> [boxes]
 macro_cache = {}      # header path -> (mtime, macros)
+# Live preview (live.py): the PDF of your unsaved text.
+lv = {"path": None, "version": 0, "error": None, "input": None, "file": None, "label": None, "secs": None}
+livers = {}           # source file -> livebuild.Live
+seq = [0]             # one version counter for every PDF the window is sent
+pdf_files = {}        # version -> path, for GET /pdf?v=
+
+
+def next_version(path):
+    seq[0] += 1
+    pdf_files[seq[0]] = path
+    for v in [v for v in pdf_files if v < seq[0] - 8]:
+        pdf_files.pop(v)
+    return seq[0]
+
+
+def view():
+    """The PDF the window shows: the live one once it exists for this file."""
+    f = state.get("file")
+    if lv["path"] and f and lv["file"] == f:
+        return lv
+    return pdf
 out_lock = threading.Lock()
 
 
@@ -155,14 +180,14 @@ def compile_pdf(tex, engine):
             pdf["file"] = str(tex)
             if ok and pdf_path.exists():
                 pdf["path"] = str(pdf_path)
-                pdf["version"] += 1
+                pdf["version"] = next_version(str(pdf_path))
                 pdf["error"] = None
                 box_cache.clear()
             else:
                 pdf["error"] = first_error(out / (tex.stem + ".log"))
                 if pdf_path.exists() and not pdf["path"]:
                     pdf["path"] = str(pdf_path)
-                    pdf["version"] += 1
+                    pdf["version"] = next_version(str(pdf_path))
     except Exception as e:  # noqa: BLE001
         with lock:
             pdf["error"] = str(e)
@@ -175,15 +200,17 @@ def compile_pdf(tex, engine):
         compile_pdf(*again)
 
 
-def synctex_view(tex, line):
+def synctex_view(tex, line, v=None):
     """Rectangles (page, x, y, w, h in PDF points, y from the top) for a line."""
-    key = (pdf["version"], line)
+    v = v or pdf
+    key = (v["version"], line)
     if key in box_cache:
         return box_cache[key]
     boxes = []
-    if pdf["path"]:
+    if v["path"]:
         try:
-            r = subprocess.run(["synctex", "view", "-i", f"{line}:0:{Path(tex).name}", "-o", pdf["path"]],
+            name = v.get("input") or Path(tex).name  # live: the body file, same line numbers
+            r = subprocess.run(["synctex", "view", "-i", f"{line}:0:{name}", "-o", v["path"]],
                                cwd=Path(tex).parent, capture_output=True, text=True, timeout=10)
             cur = {}
             for l in r.stdout.splitlines():
@@ -208,21 +235,25 @@ def synctex_view(tex, line):
             m.update(x=x1, y=y1, w=x2 - x1, h=y2 - y1)
     res = list(merged.values())
     box_cache[key] = res
+    for k in [k for k in box_cache if k[0] < seq[0] - 8]:
+        box_cache.pop(k, None)
     return res
 
 
 def synctex_edit(page, x, y):
     """Source line under a point of the PDF, if it's in the reviewed file."""
-    if not pdf["path"] or not pdf["file"]:
+    v = view()
+    if not v["path"] or not v["file"]:
         return None
+    want = os.path.realpath(v.get("input") or v["file"])
     try:
-        r = subprocess.run(["synctex", "edit", "-o", f"{page}:{x}:{y}:{pdf['path']}"],
+        r = subprocess.run(["synctex", "edit", "-o", f"{page}:{x}:{y}:{v['path']}"],
                            capture_output=True, text=True, timeout=10)
         src = None
         for l in r.stdout.splitlines():
             if l.startswith("Input:"):
                 src = os.path.realpath(l[6:])
-            elif l.startswith("Line:") and src == os.path.realpath(pdf["file"]):
+            elif l.startswith("Line:") and src == want:
                 return int(l[5:])
     except Exception:  # noqa: BLE001
         pass
@@ -233,14 +264,15 @@ def publish():
     """Attach page rectangles to the comments and send everything to the browser."""
     with lock:
         s = json.loads(json.dumps(state)) if state else {}
-        p = dict(pdf)
+        p = dict(view())
+        is_live = p is not pdf and p.get("input") is not None
     tex = s.get("file")
     same = tex and p.get("file") == tex
     if same:
         for c in s.get("comments", []):
             boxes = []
             for line in range(c["row"] + 1, min(c["end_row"], c["row"] + 6) + 2):
-                boxes += synctex_view(tex, line)
+                boxes += synctex_view(tex, line, p)
             # one rect per page
             per = {}
             for b in boxes:
@@ -254,11 +286,17 @@ def publish():
             c["boxes"] = list(per.values())
         f = s.get("focus") or {}
         if f.get("s"):
-            fb = synctex_view(tex, f["s"]) or synctex_view(tex, f["s"] + 1)
+            fb = synctex_view(tex, f["s"], p) or synctex_view(tex, f["s"] + 1, p)
             f["box"] = fb[0] if fb else None
     s["macros"] = macros_for(s.get("root"))
-    s["pdf"] = {"version": p["version"] if same else 0, "error": p["error"] if same else None,
-                "building": p["building"]}
+    err = p["error"] if same else None
+    if not is_live and lv["error"] and lv["file"] == tex:
+        err = lv["error"]
+    s["pdf"] = {"version": p["version"] if same else 0, "error": err,
+                # On-save builds run quietly behind the live preview.
+                "building": False if is_live else p["building"],
+                "live": is_live, "key": (p.get("label") or "all") if is_live else "file",
+                "secs": p.get("secs") if is_live else None}
     last["state"] = s
     broadcast("state", s)
 
@@ -318,7 +356,9 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(last["state"] or {}).encode()
             return self.send(200, body, "application/json")
         if path == "/pdf":
-            p = pdf["path"]
+            v = re.search(r"[?&]v=(\d+)", self.path)
+            p = pdf_files.get(int(v.group(1))) if v else None
+            p = p or view()["path"]
             if not p or not os.path.exists(p):
                 return self.send(404, b"no pdf yet")
             return self.send(200, Path(p).read_bytes(), "application/pdf")
@@ -363,11 +403,44 @@ def read_nvim(engine):
                 state.clear()
                 state.update(msg)
             threading.Thread(target=publish, daemon=True).start()
+        elif kind == "live":
+            start_live(msg, engine)
         elif kind == "compile":
             threading.Thread(target=compile_pdf, args=(msg["file"], msg.get("engine") or engine), daemon=True).start()
         elif kind == "quit":
             break
     os._exit(0)  # nvim went away
+
+
+def live_result(src, res):
+    with lock:
+        if res.get("show"):
+            lv.update(path=res["pdf"], input=res["input"], file=src, label=res.get("label"),
+                      secs=res.get("secs"), version=next_version(res["pdf"]))
+        if lv["file"] == src or lv["file"] is None:
+            lv["error"] = res.get("error")
+    publish()
+
+
+def start_live(msg, engine):
+    src = msg.get("file")
+    if not src or not isinstance(msg.get("lines"), list):
+        return
+    eng = msg.get("engine") or engine
+    with lock:
+        lr = livers.get(src)
+        if lr and lr.engine != eng:
+            lr.close()
+            lr = None
+        if not lr:
+            for other in livers.values():   # one file at a time
+                other.close()
+            livers.clear()
+            lr = livebuild.Live(src, build_dir(Path(src)), eng,
+                                lambda: build_dir(Path(src)) / (Path(src).stem + ".aux"),
+                                lambda res: live_result(src, res))
+            livers[src] = lr
+    lr.request(msg["lines"], msg.get("s"), msg.get("e"), msg.get("label"))
 
 
 def main():

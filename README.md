@@ -48,6 +48,9 @@ Your document is compiled and shown as a PDF. Each comment is a card in the
 margin, next to the line it's about, as in Google Docs. Click a card and nvim
 jumps there. Double-click the PDF and nvim jumps to that source line.
 
+**It updates as you type**: about half a second after you pause, with no
+saving. A half-typed `\frac{` never breaks it, and pages never flicker.
+
 </td>
 <td width="50%" valign="top">
 
@@ -103,8 +106,9 @@ manual and per chapter, a weekly trend, and the mistakes you keep making.
 
 ### ⚡ Also inside the terminal
 Without the window you get highlights, gutter numbers, a floating card and a
-sidebar checklist in nvim, plus numbered badges in the live
-[TeXpresso](https://github.com/let-def/texpresso) preview.
+sidebar checklist in nvim. If you use
+[TeXpresso](https://github.com/let-def/texpresso), comments also appear as
+numbered badges in its preview. It's optional: the window has its own live preview.
 
 </td>
 </tr>
@@ -129,7 +133,7 @@ sidebar checklist in nvim, plus numbered badges in the live
 <tr><td>🪟</td><td><b>Python 3</b>, standard library only</td><td>≥ 3.8</td><td><code>python3 --version</code></td><td>the Tutor window</td></tr>
 <tr><td>🪟</td><td><b>pdflatex</b> and <b>synctex</b> (any TeX Live or MacTeX)</td><td>TeX Live ≥ 2020</td><td><code>pdflatex --version</code>, <code>synctex help</code></td><td>the PDF in the window</td></tr>
 <tr><td>🪟</td><td>A Chromium browser: <b>Edge</b> (Windows, used automatically on WSL), Chrome or Chromium</td><td>any recent</td><td></td><td>the window itself</td></tr>
-<tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in the live preview (optional)</td></tr>
+<tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in TeXpresso's own preview (optional; the window already previews live)</td></tr>
 <tr><td>➕</td><td>A plugin manager, e.g. <a href="https://github.com/folke/lazy.nvim">lazy.nvim</a></td><td>any</td><td><code>:Lazy</code></td><td>installing (or use <code>runtimepath</code>)</td></tr>
 </table>
 
@@ -139,7 +143,8 @@ sidebar checklist in nvim, plus numbered badges in the live
 > **Your documents must compile with `pdflatex`** for the window to show them.
 > They're built into `~/.cache/latex-tutor/build/` and never next to your
 > files, so any `build/` folder you use is untouched. If you use XeLaTeX or
-> LuaLaTeX, set `gui = { engine = "xelatex" }`.
+> LuaLaTeX, set `gui = { engine = "xelatex" }`. The live preview works with
+> all three.
 
 <details>
 <summary><b>Installing the dependencies</b> (Ubuntu / WSL2 · macOS)</summary>
@@ -346,7 +351,7 @@ flowchart LR
     P -- "prompt on stdin<br/>JSON schema" --> C["claude -p<br/>(your subscription)"]
     C -- "verdict + comments<br/>(structured JSON)" --> P
     P -- "state, JSON lines" --> S["gui/server.py<br/>127.0.0.1 only"]
-    S -- "pdflatex -synctex=1" --> B[("~/.cache/latex-tutor/build")]
+    S -- "warm pdflatex spares<br/>(live, unsaved text)" --> B[("~/.cache/latex-tutor/build")]
     S -- "SSE" --> W["Tutor window<br/>pdf.js + KaTeX"]
     W -- "clicks" --> S
     S -- "actions" --> P
@@ -379,6 +384,25 @@ flowchart LR
   cross-origin requests. pdf.js, KaTeX and marked are bundled under
   `gui/static/vendor/`, so it works offline. KaTeX gets your
   `\newcommand`/`\DeclareMathOperator` macros from `header*.tex`.
+* **Live preview** (`gui/live.py`). About 150 ms after you stop typing, nvim
+  sends the buffer's unsaved text. Only the question under your cursor is
+  built (the whole file in *All questions* mode). Speed comes from **warm
+  spares**: two TeX processes kept running with your preamble already loaded
+  and `\begin{document}` already done, each waiting for its next input line.
+  A build hands one of them a body file, so only your question is typeset:
+  about 0.3–0.5 s on a typical chapter, against 2.6 s for a cold full build.
+  The body file keeps your line numbers (other lines become `%`), so SyncTeX
+  and error lines point at the real lines.
+  * **Errors.** A build with a TeX error isn't shown; the window keeps the
+    last good PDF and says *Showing last good version · line 38: …*. An error
+    that lasts more than 4 s is shown anyway, so a real mistake can't freeze
+    the preview. TeX's terminal is closed after each input line, so it can
+    never hang waiting for you, and a build is killed after 12 s.
+  * **No flicker.** pdf.js draws new pages off-screen and swaps each one in
+    only when it's ready. Your scroll position is kept.
+  * **On save.** The whole file is also compiled, quietly, so `\ref` and
+    `\cite` resolve in the live view. Editing your header file restarts the
+    spares.
 * **TeXpresso badges.** For each commented line, the plugin sends TeXpresso an
   annotated copy (`change-lines`, with the same line count) carrying a
   self-defining `\tutormarkN{rgb}{n}{title}` macro. **Your file and buffer are
@@ -425,6 +449,8 @@ require("latex-tutor").setup({
     python = "python3",
     port = 0,                   -- 0 = any free port
     engine = "pdflatex",        -- or "xelatex" / "lualatex"
+    live = true,                -- rebuild from unsaved text as you type (false = on save)
+    live_delay = 150,           -- ms after you stop typing
     window_size = "1440,920",
     open_on_review = true,      -- reviewing (Space c c) also opens the window
     open_cmd = nil,             -- { "firefox" } or function(url) … end to override
@@ -448,7 +474,7 @@ Nothing is written next to your `.tex` files.
 |---|---|---|
 | Comments, per file | `~/.local/state/nvim/latex-tutor/*.json` | No |
 | Progress log + report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |
-| Compiled PDFs for the window | `~/.cache/latex-tutor/build/` | No |
+| Compiled PDFs for the window (on-save and live) | `~/.cache/latex-tutor/build/` | No |
 | Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
 | Reply threads | Claude Code's own session history (`~/.claude/`) | No |
 
@@ -465,9 +491,19 @@ Nothing is written next to your `.tex` files.
 <details>
 <summary><b>The window opens but says "Waiting for your document…"</b></summary>
 
-Save the file (`:w`). The PDF builds on save. If the chip in the top bar
-shows **PDF: …**, the build failed with that LaTeX error. Check that
+Type something or save (`:w`). The first build after opening takes a few
+seconds while the preamble loads. If the chip in the top bar shows
+**PDF: …**, the build failed with that LaTeX error. Check that
 `pdflatex yourfile.tex` works from the file's folder, or set `gui.engine`.
+The live preview needs the file with `\begin{document}` (the main file).
+</details>
+
+<details>
+<summary><b>The preview stopped updating ("Showing last good version")</b></summary>
+
+Your current text has a LaTeX error, at the line the chip names. Fix it and
+the preview catches up within half a second. If you leave the error in, it's
+shown anyway after 4 s. To build only on save, set `gui = { live = false }`.
 </details>
 
 <details>
@@ -529,6 +565,7 @@ lua/latex-tutor/
   progress.lua  private progress log and report
 gui/
   server.py     local HTTP + SSE server, pdflatex + SyncTeX
+  live.py       live preview: warm TeX spares, error-safe swaps
   static/       the window: index.html, app.js, style.css, vendor/
 examples/TUTOR.md
 ```

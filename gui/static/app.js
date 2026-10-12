@@ -74,37 +74,64 @@ function availableWidth() {
   return Math.min(920, sheetW - marginW - 28 - 48 - 16);
 }
 
+let docKey = "";            // which question the shown PDF is of ("file" = on-save build)
+
+// Loads a new build without flicker: pages are drawn off-screen and swapped
+// in only once they're rendered, so the window never shows a blank page.
 async function loadPdf(version) {
   if (version === docVersion) return;
   docVersion = version;
   if (!version) return;
-  const keep = scroller.scrollTop;
+  const key = (S.pdf && S.pdf.key) || "";
   let next;
   try {
     next = await pdfjsLib.getDocument({ url: `/pdf?v=${version}`, isEvalSupported: false }).promise;
   } catch (e) {
     console.error("pdf load failed", e && e.message);
     showStatus("PDF could not be loaded", "error");
+    render();
     return;
   }
-  if (version !== docVersion) return; // a newer build arrived meanwhile
-  if (doc) doc.destroy();
-  doc = next;
+  if (version !== docVersion) { next.destroy(); return; } // a newer build arrived meanwhile
   const sizes = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const p = await doc.getPage(i);
+  for (let i = 1; i <= next.numPages; i++) {
+    const p = await next.getPage(i);
     const v = p.getViewport({ scale: 1 });
     sizes.push([v.width, v.height]);
   }
-  if (version !== docVersion) return;
-  buildPages(sizes);
-  scroller.scrollTop = keep;
+  if (version !== docVersion) { next.destroy(); return; }
+  const old = doc;
+  const sameQuestion = key === docKey;
+  const sameLayout = sameQuestion && pages.length === sizes.length &&
+    pages.every((p, i) => Math.abs(p.wPt - sizes[i][0]) < 0.5 && Math.abs(p.hPt - sizes[i][1]) < 0.5);
+  doc = next;
+  docKey = key;
+  if (sameLayout) {
+    // Same pages: each canvas is replaced only when its new image is ready.
+    await Promise.all(pages.filter((p) => p.visible).map((p) => drawPage(p)));
+    for (const p of pages) if (!p.visible) p.drawn = 0;
+  } else {
+    const keep = sameQuestion ? scroller.scrollTop : 0;
+    const first = sameQuestion ? Math.max(0, pages.findIndex((p) => p.visible)) : 0;
+    const fresh = makePages(sizes);
+    const want = scaleFor(fresh);
+    scale = want;
+    for (const p of fresh) sizePage(p);
+    await Promise.all(fresh.slice(first, first + 3).map((p) => drawPage(p)));
+    if (version !== docVersion) return;
+    for (const p of pages) if (p.task) { try { p.task.cancel(); } catch {} }
+    pages.forEach((p) => observer.unobserve(p.el));
+    pagesEl.replaceChildren(...fresh.map((p) => p.el));
+    pages = fresh;
+    pages.forEach((p) => observer.observe(p.el));
+    scroller.scrollTop = Math.min(keep, scroller.scrollHeight);
+  }
+  if (old && old !== doc) old.destroy();
   render();
 }
 
-function buildPages(sizes) {
-  pagesEl.innerHTML = "";
-  pages = sizes.map(([w, h], i) => {
+function makePages(sizes) {
+  return sizes.map(([w, h], i) => {
     const el = document.createElement("div");
     el.className = "page";
     el.dataset.page = i + 1;
@@ -119,20 +146,25 @@ function buildPages(sizes) {
       const r = el.getBoundingClientRect();
       post("pdfclick", { page: i + 1, x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale });
     });
-    pagesEl.append(el);
     return { el, canvas, overlay, wPt: w, hPt: h, task: null, drawn: 0 };
   });
-  sizePages();
-  pages.forEach((p) => observer.observe(p.el));
+}
+
+function scaleFor(list) {
+  const s = availableWidth() / Math.max(...list.map((p) => p.wPt));
+  return Math.max(0.5, Math.min(s, 2.2));
+}
+
+function sizePage(p) {
+  p.el.style.width = `${p.wPt * scale}px`;
+  p.el.style.height = `${p.hPt * scale}px`;
 }
 
 function sizePages() {
   if (!pages.length) return;
-  scale = availableWidth() / Math.max(...pages.map((p) => p.wPt));
-  scale = Math.max(0.5, Math.min(scale, 2.2));
+  scale = scaleFor(pages);
   for (const p of pages) {
-    p.el.style.width = `${p.wPt * scale}px`;
-    p.el.style.height = `${p.hPt * scale}px`;
+    sizePage(p);
     if (p.drawn && p.drawn !== scale && p.visible) drawPage(p);
   }
 }
@@ -150,7 +182,9 @@ async function drawPage(p) {
   if (!doc) return;
   if (p.task) { try { p.task.cancel(); } catch {} }
   const want = scale;
-  const page = await doc.getPage(+p.el.dataset.page);
+  const d = doc;
+  const page = await d.getPage(+p.el.dataset.page);
+  if (d !== doc) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   const vp = page.getViewport({ scale: want * dpr });
   const c = document.createElement("canvas");
@@ -471,6 +505,7 @@ function renderStatus() {
     const secs = Math.max(0, Math.round(Date.now() / 1000 - run.since));
     showStatus(`${run.text} · ${secs}s`, "busy");
   } else if (S.pdf && S.pdf.building) showStatus("Building PDF…", "busy");
+  else if (S.pdf && S.pdf.error && S.pdf.live) showStatus(`Showing last good version · ${S.pdf.error}`, "error");
   else if (S.pdf && S.pdf.error) showStatus(`PDF: ${S.pdf.error}`, "error");
   else showStatus("");
   clearInterval(tick);
@@ -488,8 +523,9 @@ function apply(next) {
   const prevVersion = docVersion;
   S = next;
   renderBar();
+  // A new PDF draws its overlays once its pages are in (no flash of stale marks).
   if (S.pdf && S.pdf.version && S.pdf.version !== prevVersion) loadPdf(S.pdf.version);
-  render();
+  else render();
 }
 
 /* ---- events --------------------------------------------------------------- */

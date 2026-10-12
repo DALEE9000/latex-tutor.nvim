@@ -109,7 +109,10 @@ function M.push_soon(buf)
   if push_timer then push_timer:stop() end
   push_timer = vim.defer_fn(function()
     push_timer = nil
-    if M.running() and api.nvim_buf_is_valid(buf) then send(M.state(buf)) end
+    if M.running() and api.nvim_buf_is_valid(buf) then
+      send(M.state(buf))
+      M.live_soon(buf)  -- no-op unless the question or text changed
+    end
   end, 60)
 end
 
@@ -118,6 +121,33 @@ function M.compile(buf)
   if not M.running() or buf ~= M.buf then return end
   local file = api.nvim_buf_get_name(buf)
   if file ~= "" then send({ type = "compile", file = file, engine = config.get().gui.engine }) end
+end
+
+-- Live preview: send the unsaved text a moment after you stop typing. Only
+-- the question under the cursor is built (the whole file in "All questions"
+-- mode, or when the cursor isn't in a question).
+local live_timer, live_sent
+function M.live_soon(buf, now)
+  local g = config.get().gui
+  if not g.live or not M.running() then return end
+  buf = buf or M.buf
+  if buf ~= M.buf or not (buf and api.nvim_buf_is_valid(buf)) then return end
+  if live_timer then live_timer:stop() end
+  live_timer = vim.defer_fn(function()
+    live_timer = nil
+    if not (M.running() and api.nvim_buf_is_valid(buf)) then return end
+    local st = store.get(buf)
+    local f = (not st.show_all) and st.focus or nil
+    local tick = api.nvim_buf_get_changedtick(buf)
+    local key = table.concat({ buf, tick, f and f.s or 0, f and f.e or 0 }, ":")
+    if key == live_sent then return end
+    live_sent = key
+    send({
+      type = "live", file = api.nvim_buf_get_name(buf), engine = g.engine,
+      lines = api.nvim_buf_get_lines(buf, 0, -1, false),
+      s = f and f.s or nil, e = f and f.e or nil, label = f and f.label or nil,
+    })
+  end, now and 0 or g.live_delay)
 end
 
 -- Follow the .tex buffer you switch to.

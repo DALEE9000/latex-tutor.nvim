@@ -62,6 +62,8 @@ M.defaults = {
     port = 0,              -- 0 = any free port
     engine = "pdflatex",   -- builds into ~/.cache/latex-tutor/build/, never next to your files
     window_size = "1440,920",
+    live = true,           -- rebuild from your unsaved text as you type (false = on save only)
+    live_delay = 150,      -- ms after you stop typing
     open_on_review = true, -- Space c c also opens the window (false = terminal sidebar only)
     open_cmd = nil,        -- override: a command list (URL appended) or function(url)
   },

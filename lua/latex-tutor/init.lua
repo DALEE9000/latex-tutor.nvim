@@ -527,6 +527,11 @@ function M.setup(opts)
     group = group, pattern = "*.tex",
     callback = function(a) if store.bufs[a.buf] then store.save(a.buf) end end,
   })
+  api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    group = group,
+    pattern = "*.tex",
+    callback = function(a) if attached[a.buf] then gui.live_soon(a.buf) end end,
+  })
   api.nvim_create_autocmd("BufWritePost", {
     group = group, pattern = "*.tex",
     callback = function(a) gui.compile(a.buf) end,
