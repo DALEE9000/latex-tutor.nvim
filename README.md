@@ -42,6 +42,23 @@ In the sidebar: `<CR>` jump · `r` resolve · `R` reply · `dd` delete ·
 A review takes about 30–90 s. A spinner sits in the top-right corner, and you
 can keep editing; comments are re-anchored by the text they quote.
 
+## First test (about 5 minutes)
+
+1. Restart nvim, then open a chapter, e.g.
+   `nvim ~/math/allofstats/allofstatschap5/allofstatschap5.tex`.
+   TeXpresso opens as usual.
+2. Run `:Tutor prefs` to check that `TUTOR.md` opens. Close it with `:q`.
+3. Go to an exercise, e.g. `:16` for Q 5.8.1, and press `␣cc`. A spinner
+   appears in the top-right corner. After about 30–90 s, the comments show up
+   in the gutter, the sidebar and the TeXpresso PDF.
+4. Press `␣cn` to step through the comments. Press `␣cR` on one, type a
+   reply, and send it with `<C-s>`. Press `␣cr` to resolve a comment; its
+   badge leaves the PDF.
+5. Restart nvim and reopen the file. The comments should still be there.
+
+If the PDF breaks, press `␣ca`, which sends every line back clean. If nothing
+happens, run `:messages`.
+
 ## Tutoring preferences (`TUTOR.md`)
 
 The nearest `TUTOR.md`, walking up from the `.tex` file, wins. That lets one
