@@ -141,8 +141,8 @@ function M.report()
 
   add("## Overall")
   add("")
-  add(string.format("- **%d** reviews of **%d** exercises. Score on each exercise's latest review: **%s** (%s).",
-    #reviews, n, pct(score), verdict_mix(by)))
+  add(string.format("- **%d** review%s of **%d** exercise%s. Score on each exercise's latest review: **%s** (%s).",
+    #reviews, #reviews == 1 and "" or "s", n, n == 1 and "" or "s", pct(score), verdict_mix(by)))
   local sev_parts = {}
   for _, s in ipairs(config.severity_order) do
     if sev_total[s] then sev_parts[#sev_parts + 1] = sev_total[s] .. " " .. config.sev(s).label:lower() end
