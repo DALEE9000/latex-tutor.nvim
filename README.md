@@ -354,7 +354,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | 👁 | `␣co` | `:Tutor panel` | Terminal sidebar with the comment checklist |
 | | `␣cq` | `:Tutor hide` / `show` | Hide everything; comments are kept |
 | | `␣ca` | `:Tutor pdf` | TeXpresso badges on / off |
-| 📈 | `␣cs` | `:Tutor progress` | Progress report |
+| 📈 | `␣cs` | `:Tutor progress` | Progress report (in the Tutor window when it's open) |
 | ⚙️ | `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
 | 🧹 | | `:Tutor clear` | **Delete every comment** (and summary) in this file. Your progress log keeps its history |
 
@@ -370,6 +370,12 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | <kbd>A</kbd> | All reviewed questions ↔ just this one |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send a reply |
 | Question menu (top left) | Jump to another exercise |
+| <kbd>P</kbd> or **Progress** | Your progress report, over the PDF (<kbd>Esc</kbd> closes it) |
+| <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>, or the **− 100% +** control | Zoom the PDF in / out / back to fit width |
+| <kbd>Ctrl</kbd>+scroll, or pinch on a trackpad | Zoom around the pointer |
+
+As you type, the window keeps the line you're on in view. It scrolls only
+when that line is off-screen, so it doesn't fight your own scrolling.
 
 ### In the terminal sidebar (`␣co`)
 

@@ -91,6 +91,8 @@ function M.state(buf)
     name = vim.fn.fnamemodify(file, ":t"),
     root = require("latex-tutor.prompt").project_root(file),
     focus = f.label and { label = f.label, s = f.s, e = f.e } or nil,
+    -- the line you're on, so the window can keep it in view as you type
+    cursor = api.nvim_get_current_buf() == buf and api.nvim_win_get_cursor(0)[1] or nil,
     show_all = st.show_all or false,
     active = st.active,
     comments = comments,
@@ -150,6 +152,13 @@ function M.live_soon(buf, now)
   end, now and 0 or g.live_delay)
 end
 
+-- The progress report, shown over the PDF in the window.
+function M.show_progress()
+  if not M.running() then return false end
+  send({ type = "progress", md = table.concat(require("latex-tutor.progress").report(), "\n") })
+  return true
+end
+
 -- Follow the .tex buffer you switch to.
 function M.follow(buf)
   if not M.running() or buf == M.buf then return end
@@ -196,6 +205,7 @@ local function act(msg)
     st.show_all = not st.show_all
     T.refresh(buf)
   elseif a == "jump_line" and tonumber(msg.line) then T.jump_line(buf, tonumber(msg.line))
+  elseif a == "progress" then M.show_progress()
   end
 end
 

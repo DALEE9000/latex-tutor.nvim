@@ -150,9 +150,46 @@ function makePages(sizes) {
   });
 }
 
+// zoom = 1 is "fit to width"; the buttons, Ctrl +/−/0 and Ctrl+wheel (or a
+// trackpad pinch) change it. Remembered per browser.
+let zoom = 1;
+try { zoom = Math.min(4, Math.max(0.5, +localStorage.getItem("lt-zoom") || 1)); } catch {}
+const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+
 function scaleFor(list) {
   const s = availableWidth() / Math.max(...list.map((p) => p.wPt));
-  return Math.max(0.5, Math.min(s, 2.2));
+  return Math.max(0.5, Math.min(s, 2.2)) * zoom;
+}
+
+// Keeps the point under (ax, ay) — viewport coordinates in the scroller —
+// where it was, so zooming doesn't throw you to another part of the page.
+function setZoom(z, ax, ay) {
+  z = Math.min(4, Math.max(0.5, Math.round(z * 100) / 100));
+  if (z === zoom) return;
+  ax = ax ?? scroller.clientWidth / 2;
+  ay = ay ?? scroller.clientHeight / 2;
+  const fx = (scroller.scrollLeft + ax) / Math.max(1, scroller.scrollWidth);
+  const fy = (scroller.scrollTop + ay) / Math.max(1, scroller.scrollHeight);
+  zoom = z;
+  try { localStorage.setItem("lt-zoom", String(z)); } catch {}
+  sizePages();
+  render();
+  scroller.style.scrollBehavior = "auto";
+  scroller.scrollLeft = fx * scroller.scrollWidth - ax;
+  scroller.scrollTop = fy * scroller.scrollHeight - ay;
+  scroller.style.scrollBehavior = "";
+  renderZoom();
+}
+
+function stepZoom(dir) {
+  const next = dir > 0 ? ZOOMS.find((v) => v > zoom + 0.001) : [...ZOOMS].reverse().find((v) => v < zoom - 0.001);
+  if (next) setZoom(next);
+}
+
+function renderZoom() {
+  $("#zoom-fit").textContent = `${Math.round(zoom * 100)}%`;
+  $("#zoom-fit").title = zoom === 1 ? "Fit to width (Ctrl 0)" : "Back to fit width (Ctrl 0)";
+  document.body.classList.toggle("zoomed", zoom > 1);
 }
 
 function sizePage(p) {
@@ -451,7 +488,9 @@ function scrollToActive(force) {
   const fb = S.focus && S.focus.box;
   if (y == null && fb && pages[fb.page - 1]) y = pages[fb.page - 1].el.offsetTop + fb.y * scale - margin.offsetTop;
   if (y == null) return;
-  const key = `${S.focus && S.focus.label}|${S.active}|${docVersion}`;
+  // Only when you switch comment or question, not on every rebuild while you
+  // type (that's what kept throwing the view back up).
+  const key = `${S.focus && S.focus.label}|${S.active}`;
   if (!force && key === lastScrollKey) return;
   lastScrollKey = key;
   const top = y + margin.offsetTop;
@@ -517,6 +556,32 @@ function render() {
   drawOverlays();
   renderMargin();
   scrollToActive(false);
+  followCursor();
+}
+
+// Keeps the line you're typing on in view. It scrolls only when that line is
+// off-screen, and only after you move or type, so it never fights your own
+// scrolling of the window.
+let lastCursorKey = "";
+function followCursor() {
+  const b = S.cursor_box;
+  if (!b || !pages[b.page - 1] || !$("#report").hidden) return;
+  const key = `${S.cursor}|${docVersion}`;
+  if (key === lastCursorKey) return;
+  lastCursorKey = key;
+  const p = pages[b.page - 1].el;
+  const top = p.offsetTop + b.y * scale, bottom = top + b.h * scale;
+  const view = scroller.scrollTop, h = scroller.clientHeight;
+  const narrowSheet = narrowMq.matches && !margin.classList.contains("closed");
+  const usable = narrowSheet ? h * 0.5 : h;   // the bottom sheet covers the rest
+  if (top < view + 24 || bottom > view + usable - 24) {
+    scroller.scrollTo({ top: Math.max(0, top - usable * 0.35) });
+  }
+  // Zoomed in: bring it into view sideways too.
+  const left = p.offsetLeft + b.x * scale, right = left + b.w * scale;
+  if (left < scroller.scrollLeft || right > scroller.scrollLeft + scroller.clientWidth) {
+    scroller.scrollTo({ left: Math.max(0, left - 40) });
+  }
 }
 
 function apply(next) {
@@ -533,6 +598,7 @@ function apply(next) {
 function connect() {
   const es = new EventSource("/events");
   es.addEventListener("state", (e) => apply(JSON.parse(e.data)));
+  es.addEventListener("progress", (e) => openReport(JSON.parse(e.data).md));
   es.addEventListener("build", () => { if (S.pdf) { S.pdf.building = true; renderStatus(); } });
   es.onerror = () => showStatus("Disconnected — is nvim still running?", "error");
   // nvim quit: close this window. A browser may refuse for a tab it didn't
@@ -551,11 +617,61 @@ function connect() {
 $("#btn-review").addEventListener("click", () => post("review"));
 $("#btn-check").addEventListener("click", () => post("check"));
 $("#btn-all").addEventListener("click", () => post("show_all"));
+$("#btn-progress").addEventListener("click", () => post("progress"));
+$("#zoom-in").addEventListener("click", () => stepZoom(1));
+$("#zoom-out").addEventListener("click", () => stepZoom(-1));
+$("#zoom-fit").addEventListener("click", () => setZoom(1));
+// Ctrl+wheel and trackpad pinch zoom the PDF, not the whole window.
+let wheelZoom = null;
+scroller.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const r = scroller.getBoundingClientRect();
+  wheelZoom = { z: (wheelZoom ? wheelZoom.z : zoom) * Math.exp(-e.deltaY * 0.0025), x: e.clientX - r.left, y: e.clientY - r.top };
+  if (!wheelZoom.raf) wheelZoom.raf = requestAnimationFrame(() => {
+    const w = wheelZoom; wheelZoom = null;
+    setZoom(w.z, w.x, w.y);
+  });
+}, { passive: false });
+$("#report-close").addEventListener("click", () => closeReport());
+$("#report").addEventListener("click", (e) => { if (e.target.id === "report") closeReport(); });
 $("#picker").addEventListener("change", (e) => post("jump_line", { line: +e.target.value }));
 $("#sheet-toggle").addEventListener("click", () => { margin.classList.toggle("closed"); renderMargin(); });
 
+/* ---- progress report ------------------------------------------------------ */
+
+function openReport(text) {
+  const body = $("#report-body");
+  body.innerHTML = md(text);
+  // Wide tables scroll sideways inside the card instead of widening the page.
+  body.querySelectorAll("table").forEach((t) => {
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    t.replaceWith(wrap);
+    wrap.append(t);
+  });
+  $("#report").hidden = false;
+  document.body.classList.add("report-open");
+  body.scrollTop = 0;
+  $("#report-close").focus();
+}
+
+function closeReport() {
+  $("#report").hidden = true;
+  document.body.classList.remove("report-open");
+}
+
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#report").hidden) { closeReport(); e.preventDefault(); return; }
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === "=" || e.key === "+") { stepZoom(1); e.preventDefault(); }
+    else if (e.key === "-" || e.key === "_") { stepZoom(-1); e.preventDefault(); }
+    else if (e.key === "0") { setZoom(1); e.preventDefault(); }
+    return;
+  }
   if (e.target.closest("textarea, input, select")) return;
+  if (e.key === "p" || e.key === "P") { post("progress"); e.preventDefault(); return; }
+  if (!$("#report").hidden) return;
   const list = S.comments || [];
   const i = list.findIndex((c) => c.id === S.active);
   if (e.key === "j" || e.key === "J") { const c = list[Math.min(list.length - 1, i + 1)]; if (c) activate(c.id, true); }
@@ -567,12 +683,27 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
+// The top bar wraps onto more rows in narrow windows; everything below it is
+// placed with --bar-h, so keep that equal to its real height.
+let barH = 0;
+new ResizeObserver(() => {
+  const h = Math.ceil($(".bar").getBoundingClientRect().height);
+  if (h && h !== barH) {
+    barH = h;
+    document.documentElement.style.setProperty("--bar-h", `${h}px`);
+  }
+}).observe($(".bar"));
+
 let resizeT;
 new ResizeObserver(() => {
   clearTimeout(resizeT);
   resizeT = setTimeout(() => { sizePages(); render(); }, 120);
 }).observe(scroller);
 narrowMq.addEventListener("change", () => render());
+
+const qZoom = +new URLSearchParams(location.search).get("zoom");
+if (qZoom) zoom = Math.min(4, Math.max(0.5, qZoom));
+renderZoom();
 
 const qTheme = new URLSearchParams(location.search).get("theme");
 if (qTheme) document.documentElement.dataset.theme = qTheme;
@@ -585,6 +716,9 @@ if (new URLSearchParams(location.search).has("snapshot")) {
   hold.src = "/delay?ms=" + (new URLSearchParams(location.search).get("snapshot") || "6000");
   document.body.append(hold);
   fetch("/state").then((r) => r.json()).then(apply);
+  if (new URLSearchParams(location.search).has("report")) {
+    fetch("/progress").then((r) => r.json()).then((d) => d.md && openReport(d.md));
+  }
 } else {
   connect();
 }

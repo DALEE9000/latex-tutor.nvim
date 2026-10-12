@@ -465,11 +465,16 @@ local function keymaps(buf)
   end, "toggle PDF annotations")
   map("n", k.cancel, function() M.cancel(buf) end, "cancel review")
   map("n", k.hide, M.toggle_hidden, "hide / show everything")
-  map("n", k.progress, progress.open, "progress report")
+  map("n", k.progress, M.open_progress, "progress report")
   map("n", k.check, function() M.check(buf) end, "check my fixes")
   map("n", k.gui, function() gui.open(buf) end, "open the Tutor window")
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
+end
+
+-- In the Tutor window when it's open, otherwise in an nvim split.
+function M.open_progress()
+  if not gui.show_progress() then progress.open() end
 end
 
 function M.attach(buf)
@@ -566,7 +571,7 @@ function M.setup(opts)
     elseif what == "" or what == "exercise" then
       M.review(buf, scope.unit_at(buf, api.nvim_win_get_cursor(0)[1]))
     elseif what == "panel" then M.show(); panel.toggle(buf)
-    elseif what == "progress" then progress.open()
+    elseif what == "progress" then M.open_progress()
     elseif what == "check" then M.check(buf)
     elseif what == "gui" then gui.open(buf)
     elseif what == "hide" then if not store.hidden then M.toggle_hidden() end

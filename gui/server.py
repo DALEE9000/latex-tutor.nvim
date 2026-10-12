@@ -284,6 +284,14 @@ def publish():
                     x2, y2 = max(m["x"] + m["w"], b["x"] + b["w"]), max(m["y"] + m["h"], b["y"] + b["h"])
                     m.update(x=x1, y=y1, w=x2 - x1, h=y2 - y1)
             c["boxes"] = list(per.values())
+        cur = s.get("cursor")
+        if isinstance(cur, int):
+            # nearest line at or above the cursor that made it onto the page
+            for line in range(cur, max(0, cur - 6), -1):
+                cb = synctex_view(tex, line, p)
+                if cb:
+                    s["cursor_box"] = cb[0]
+                    break
         f = s.get("focus") or {}
         if f.get("s"):
             fb = synctex_view(tex, f["s"], p) or synctex_view(tex, f["s"] + 1, p)
@@ -352,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
             ms = int((self.path.split("ms=")[1:] or ["0"])[0] or 0)
             time.sleep(min(ms, 30000) / 1000)
             return self.send(200, b"GIF89a\x01\x00\x01\x00\x00\x00\x00;", "image/gif")
+        if path == "/progress":  # the last report nvim sent (snapshot mode)
+            return self.send(200, json.dumps({"md": last.get("progress") or ""}).encode(), "application/json")
         if path == "/state":
             body = json.dumps(last["state"] or {}).encode()
             return self.send(200, body, "application/json")
@@ -403,6 +413,9 @@ def read_nvim(engine):
                 state.clear()
                 state.update(msg)
             threading.Thread(target=publish, daemon=True).start()
+        elif kind == "progress":
+            last["progress"] = msg.get("md") or ""
+            broadcast("progress", {"md": last["progress"]})
         elif kind == "live":
             start_live(msg, engine)
         elif kind == "compile":

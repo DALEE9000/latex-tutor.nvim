@@ -28,7 +28,13 @@
   </div>
   <div class="spacer"></div>
   <span class="chip" id="status" hidden></span>
+  <div class="zoom" id="zoom" role="group" aria-label="Zoom">
+    <button class="zbtn" id="zoom-out" title="Zoom out (Ctrl −)" aria-label="Zoom out">−</button>
+    <button class="zbtn zlabel" id="zoom-fit" title="Fit to width (Ctrl 0)">100%</button>
+    <button class="zbtn" id="zoom-in" title="Zoom in (Ctrl +)" aria-label="Zoom in">+</button>
+  </div>
   <div class="actions">
+    <button class="btn ghost" id="btn-progress" title="Your progress report (P)">Progress</button>
     <button class="btn ghost" id="btn-all" title="Show every reviewed question (A)">All questions</button>
     <button class="btn" id="btn-review" title="Review the question under your cursor">Review</button>
     <button class="btn primary" id="btn-check" title="Ask the tutor whether your edits fix the open comments (V)">Check my fixes</button>
@@ -46,6 +52,13 @@
 </main>
 
 <button class="sheet-toggle" id="sheet-toggle" hidden>Comments</button>
+
+<section class="report" id="report" hidden aria-label="Progress report">
+  <div class="report-card">
+    <button class="btn report-close" id="report-close" title="Close (Esc)" aria-label="Close">✕</button>
+    <div class="report-body" id="report-body"></div>
+  </div>
+</section>
 
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/katex.min.js"></script>
