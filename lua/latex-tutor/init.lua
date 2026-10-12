@@ -12,6 +12,7 @@ local prompt = require("latex-tutor.prompt")
 local claude = require("latex-tutor.claude")
 local scope = require("latex-tutor.scope")
 local progress = require("latex-tutor.progress")
+local gui = require("latex-tutor.gui")
 
 local M = {}
 
@@ -26,13 +27,27 @@ local function is_tex(buf)
   return api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "tex"
 end
 
+-- Make the question containing 1-based `row1` the focus. Returns true if the
+-- focus moved (or the buffer changed since it was computed).
+function M.focus(buf, row1, force)
+  local st = store.get(buf)
+  local f = st.focus
+  local tick = api.nvim_buf_get_changedtick(buf)
+  if not force and f and f.tick == tick and row1 >= f.s and row1 <= f.e then return false end
+  local u = scope.unit_at(buf, row1)
+  local moved = force or not f or f.s ~= u.s or f.e ~= u.e
+  st.focus = { s = u.s, e = u.e, label = u.label, tick = tick }
+  return moved
+end
+
 -- Redraw everything that shows comments for `buf`.
 function M.refresh(buf)
+  gui.push_soon(buf)
   ui.render(buf)
   if panel.is_open() and panel.src == buf then panel.render() end
   pdf.sync_soon(buf)
   store.save_soon(buf)
-  if ui.card.id and not store.hidden then
+  if ui.card.id and not store.hidden and not gui.running() then
     local c = store.get(buf).comments[ui.card.id]
     if c and api.nvim_get_current_buf() == buf then ui.show_card(c, true) else ui.close_card() end
   end
@@ -116,42 +131,66 @@ function M.review(buf, unit)
       -- Lines may have been added inside the range; widen generously.
       e0 = e0 + 50
     end
-    -- A new review of a range replaces its open comments (resolved ones stay).
     store.sync(buf)
-    for _, c in ipairs(store.list(buf, { open = true })) do
-      if c.row >= s0 and c.row <= e0 then store.remove(buf, c.id) end
+    if unit.kind == "exercise" then
+      -- Re-find the exercise's lines as they are now (you may have edited it).
+      local u2 = scope.unit_at(buf, s0 + 1)
+      s0, e0 = u2.s - 1, u2.e - 1
+    end
+    -- A new review of a question replaces that question's earlier comments
+    -- (fresh_review = false keeps the resolved ones).
+    for _, c in ipairs(store.list(buf)) do
+      if c.row >= s0 and c.row <= e0 and (cfg.fresh_review or not c.resolved) then store.remove(buf, c.id) end
     end
     local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
-    local counts = {}
+    local counts, fresh = {}, {}
     for _, rc in ipairs(out.comments or {}) do
       if type(rc) == "table" and rc.line then
         local L = rc.line + shift
         local row, col, er, ec = store.anchor(lines, L, rc.quote, rc.end_line and (rc.end_line + shift), 8)
-        store.add(buf, {
+        fresh[#fresh + 1] = {
           row = row, col = col, end_row = er, end_col = ec,
           quote = rc.quote, severity = config.severities[rc.severity] and rc.severity or "improve",
           title = rc.title or "(untitled)", body = rc.body or "", hint = rc.hint, fix = rc.fix,
           confidence = rc.confidence, session = session, created = os.time(), unit = unit.label,
-        })
+          orig = table.concat(vim.list_slice(lines, row + 1, er + 1), "\n"),
+        }
         counts[rc.severity] = (counts[rc.severity] or 0) + 1
       end
     end
+    -- Number this question's comments 1, 2, 3… in reading order.
+    table.sort(fresh, function(a, b)
+      if a.row ~= b.row then return a.row < b.row end
+      return a.col < b.col
+    end)
+    for i, c in ipairs(fresh) do
+      c.n = i
+      store.add(buf, c)
+    end
     local st = store.get(buf)
+    for i = #st.summaries, 1, -1 do
+      if st.summaries[i].label == unit.label then table.remove(st.summaries, i) end
+    end
     table.insert(st.summaries, {
       label = unit.label, verdict = out.verdict, summary = out.summary, at = os.time(), session = session,
     })
-    while #st.summaries > 30 do table.remove(st.summaries, 1) end
+    while #st.summaries > 200 do table.remove(st.summaries, 1) end
     pcall(progress.record_review, file, unit, out)
 
     panel.src = buf
-    if cfg.panel.auto_open and not panel.is_open() and not store.hidden then panel.open(buf) end
+    M.focus(buf, s0 + 1, true)
+    st.active = fresh[1] and fresh[1].id or nil
+    if cfg.panel.auto_open and not panel.is_open() and not store.hidden and not gui.running() then panel.open(buf) end
     M.refresh(buf)
 
     local parts = {}
     for _, sev in ipairs(config.severity_order) do
       if counts[sev] then parts[#parts + 1] = counts[sev] .. " " .. config.sev(sev).label:lower() end
     end
-    notify(string.format("%s: %s", unit.label, #parts > 0 and table.concat(parts, ", ") or "no comments"))
+    local k = cfg.keymaps
+    notify(string.format("%s: %s%s", unit.label, #parts > 0 and table.concat(parts, ", ") or "no comments",
+      #fresh > 0 and string.format(" · %s%s steps through them", k.prefix, k.next):gsub("<localleader>",
+        vim.g.maplocalleader == " " and "Space " or "<localleader>") or ""))
   end)
 end
 
@@ -165,6 +204,65 @@ function M.cancel(buf)
   else
     notify("No review running")
   end
+end
+
+-- Check fixes ---------------------------------------------------------------
+
+-- Ask the tutor whether your edits fix the open comments of the question
+-- under the cursor. Fixed ones are resolved; the rest get a short note.
+function M.check(buf)
+  buf = (buf == nil or buf == 0) and api.nvim_get_current_buf() or buf
+  local key = "check:" .. buf
+  if claude.running(key) then return notify("Already checking", vim.log.levels.WARN) end
+  if api.nvim_get_current_buf() == buf then M.focus(buf, api.nvim_win_get_cursor(0)[1]) end
+  if not store.get(buf).focus then M.focus(buf, 1) end
+  store.sync(buf)
+  local st = store.get(buf)
+  local unit = { s = st.focus.s, e = st.focus.e, label = st.focus.label }
+  local todo = vim.tbl_filter(function(c) return c.severity ~= "praise" end,
+    store.list(buf, { open = true, focus = true }))
+  if #todo == 0 then return notify("No open comments in " .. unit.label) end
+  local file = api.nvim_buf_get_name(buf)
+  local root = prompt.project_root(file)
+  local _, prefs = prompt.find_prefs(file)
+  for _, c in ipairs(todo) do c.pending = true end
+  M.refresh(buf)
+  ui.task_start(key, "Tutor checking " .. unit.label)
+  claude.run({
+    key = key,
+    prompt = prompt.check(buf, unit, todo),
+    system = prompt.system(prefs),
+    schema = prompt.check_schema,
+    cwd = root,
+  }, function(err, out)
+    ui.task_stop(key)
+    for _, c in ipairs(todo) do c.pending = nil end
+    if not api.nvim_buf_is_valid(buf) then return end
+    if err then
+      M.refresh(buf)
+      return notify(err, vim.log.levels.ERROR)
+    end
+    local by_n = {}
+    for _, c in ipairs(todo) do by_n[c.n] = c end
+    local fixed, left = 0, 0
+    for _, r in ipairs(out.results or {}) do
+      local c = type(r) == "table" and by_n[r.n]
+      if c then
+        local label = r.status == "fixed" and "✓ fixed" or (r.status == "partly" and "◐ partly fixed" or "✗ not fixed yet")
+        table.insert(c.thread, { role = "tutor", text = label .. ": " .. (r.note or ""), at = os.time() })
+        if r.status == "fixed" then
+          c.resolved = true
+          fixed = fixed + 1
+          pcall(progress.record_resolve, file, c, "tutor")
+        else
+          left = left + 1
+          c.orig = store.text(buf, c) -- back to "open" until you edit it again
+        end
+      end
+    end
+    M.refresh(buf)
+    notify(string.format("%s: %d fixed, %d still open", unit.label, fixed, left))
+  end)
 end
 
 -- Comment actions -----------------------------------------------------------
@@ -188,10 +286,29 @@ function M.jump(buf, c, focus)
   api.nvim_win_set_cursor(win, { c.row + 1, c.col })
   if focus then api.nvim_set_current_win(win) end
   api.nvim_win_call(win, function() vim.cmd("normal! zv") end)
-  ui.set_active(buf, c)
+  M.focus(buf, c.row + 1)
+  store.get(buf).active = c.id
+  M.refresh(buf)
   panel.highlight(c.id, true)
   pdf.reveal(buf, c.row)
-  if not panel.is_open() and api.nvim_get_current_win() == win then ui.show_card(c, true) end
+  if not panel.is_open() and not gui.running() and api.nvim_get_current_win() == win then ui.show_card(c, true) end
+end
+
+-- Expand a comment in the sidebar without moving the cursor.
+function M.activate(buf, c)
+  store.get(buf).active = c.id
+  M.refresh(buf)
+  panel.highlight(c.id, true)
+end
+
+function M.jump_line(buf, row1)
+  local win = source_win(buf)
+  if not win then return end
+  api.nvim_set_current_win(win)
+  api.nvim_win_set_cursor(win, { math.min(row1, api.nvim_buf_line_count(buf)), 0 })
+  vim.cmd("normal! zvzt")
+  M.focus(buf, row1)
+  M.refresh(buf)
 end
 
 function M.toggle_resolve(buf, c)
@@ -205,8 +322,10 @@ function M.delete(buf, c)
   M.refresh(buf)
 end
 
-function M.reply(buf, c)
-  ui.compose(string.format("Reply to #%d · %s", c.n, c.title), function(text)
+-- Reply to a comment. With `text` (from the GUI) the compose float is skipped.
+function M.reply(buf, c, text)
+  local compose = text and function(_, cb) cb(text) end or ui.compose
+  compose(string.format("Reply to #%d · %s", c.n, c.title), function(text)
     table.insert(c.thread, { role = "you", text = text, at = os.time() })
     c.pending = true
     M.refresh(buf)
@@ -287,7 +406,7 @@ function M.next(dir)
   M.jump(buf, target, true)
 end
 
--- Cursor tracking: active highlight, panel card, auto card.
+-- Cursor tracking: focused question, active comment, panel card, auto card.
 local cursor_timer
 local function on_cursor()
   if cursor_timer then cursor_timer:stop() end
@@ -295,11 +414,16 @@ local function on_cursor()
     cursor_timer = nil
     local buf = api.nvim_get_current_buf()
     if store.hidden or not is_tex(buf) or not store.bufs[buf] then return end
+    local st = store.get(buf)
+    local moved = M.focus(buf, api.nvim_win_get_cursor(0)[1])
     local _, c = cursor_comment()
-    ui.set_active(buf, c)
-    if panel.is_open() then
-      panel.highlight(c and c.id, true)
-    elseif c and config.get().card.auto and not vim.fn.mode():find("^i") then
+    local id = c and c.id or nil
+    if moved or id ~= st.active then
+      if c or moved then st.active = id end -- keep the last card open while you read nearby
+      M.refresh(buf)
+      if panel.is_open() then panel.highlight(st.active, true) end
+    end
+    if not panel.is_open() and not gui.running() and c and config.get().card.auto and not vim.fn.mode():find("^i") then
       ui.show_card(c)
     end
     if not c and ui.card.win and api.nvim_get_current_win() ~= ui.card.win then ui.close_card() end
@@ -337,6 +461,8 @@ local function keymaps(buf)
   map("n", k.cancel, function() M.cancel(buf) end, "cancel review")
   map("n", k.hide, M.toggle_hidden, "hide / show everything")
   map("n", k.progress, progress.open, "progress report")
+  map("n", k.check, function() M.check(buf) end, "check my fixes")
+  map("n", k.gui, function() gui.open(buf) end, "open the Tutor window")
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
 end
@@ -346,6 +472,8 @@ function M.attach(buf)
   attached[buf] = true
   store.load(buf)
   keymaps(buf)
+  local win = vim.fn.bufwinid(buf)
+  M.focus(buf, win ~= -1 and api.nvim_win_get_cursor(win)[1] or 1)
   ui.render(buf)
   api.nvim_buf_attach(buf, false, {
     on_lines = function(_, b, _, first, _, new_last)
@@ -377,6 +505,7 @@ function M.setup(opts)
         panel.src = a.buf
         panel.render()
       end
+      if attached[a.buf] then gui.follow(a.buf) end
     end,
   })
   api.nvim_create_autocmd("VimResized", {
@@ -393,9 +522,16 @@ function M.setup(opts)
     group = group, pattern = "*.tex",
     callback = function(a) if store.bufs[a.buf] then store.save(a.buf) end end,
   })
+  api.nvim_create_autocmd("BufWritePost", {
+    group = group, pattern = "*.tex",
+    callback = function(a) gui.compile(a.buf) end,
+  })
   api.nvim_create_autocmd("VimLeavePre", {
     group = group,
-    callback = function() for b in pairs(store.bufs) do store.save(b) end end,
+    callback = function()
+      for b in pairs(store.bufs) do store.save(b) end
+      gui.stop()
+    end,
   })
 
   api.nvim_create_user_command("Tutor", function(o)
@@ -409,6 +545,8 @@ function M.setup(opts)
       M.review(buf, scope.unit_at(buf, api.nvim_win_get_cursor(0)[1]))
     elseif what == "panel" then M.show(); panel.toggle(buf)
     elseif what == "progress" then progress.open()
+    elseif what == "check" then M.check(buf)
+    elseif what == "gui" then gui.open(buf)
     elseif what == "hide" then if not store.hidden then M.toggle_hidden() end
     elseif what == "show" then if store.hidden then M.toggle_hidden() end
     elseif what == "next" then M.next(1)
@@ -425,7 +563,7 @@ function M.setup(opts)
     end
   end, {
     nargs = "?", range = true,
-    complete = function() return { "exercise", "file", "panel", "hide", "show", "progress", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
+    complete = function() return { "exercise", "file", "panel", "gui", "check", "hide", "show", "progress", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
     desc = "latex-tutor",
   })
 

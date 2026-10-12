@@ -6,7 +6,6 @@ local config = require("latex-tutor.config")
 local store = require("latex-tutor.store")
 local M = {}
 
-local ns_active = api.nvim_create_namespace("latex_tutor_active")
 local ns_pending = api.nvim_create_namespace("latex_tutor_pending")
 
 function M.highlights()
@@ -17,6 +16,7 @@ function M.highlights()
   for name, s in pairs(config.severities) do
     local g = config.group(name)
     set(g, { bg = s.tint, sp = s.hex, undercurl = name ~= "praise", underline = name == "praise" })
+    set(g .. "Soft", { sp = s.hex, undercurl = name ~= "praise", underline = name == "praise" })
     set(g .. "Sign", { fg = s.hex, bold = true })
     set(g .. "Virt", { fg = s.hex, italic = true })
     set(g .. "Badge", { fg = "#16181d", bg = s.hex, bold = true })
@@ -28,17 +28,23 @@ function M.highlights()
   set("LatexTutorTitle", { bold = true })
   set("LatexTutorDim", { link = "Comment" })
   set("LatexTutorHeader", { fg = "#16181d", bg = "#c0caf5", bold = true })
+  set("LatexTutorFixed", { fg = config.severities.praise.hex, bold = true })
+  set("LatexTutorEdited", { fg = config.severities.rigor.hex, bold = true })
+  set("LatexTutorOpen", { fg = "#7f849c" })
 end
 
--- Draw every visible comment of `buf`. Positions are read back from the old
--- extmarks first so edits made since the last render are kept.
+-- Draw the comments of `buf`. Only the focused question's comments are
+-- decorated, and only the active one (under the cursor) gets the tinted
+-- background and its title at the end of the line, so you see one thing at a
+-- time. Every comment keeps a bare extmark so it still follows your edits.
+-- Positions are read back from the old extmarks first.
 function M.render(buf)
   if not api.nvim_buf_is_valid(buf) then return end
   local cfg = config.get()
-  store.sync(buf)
+  local st = store.sync(buf)
   api.nvim_buf_clear_namespace(buf, store.ns, 0, -1)
   local n = api.nvim_buf_line_count(buf)
-  for _, c in ipairs(store.list(buf, { visible = true })) do
+  for _, c in ipairs(store.list(buf)) do
     local g = config.group(c.severity)
     local row = math.min(c.row, n - 1)
     local end_row = math.min(math.max(c.end_row, row), n - 1)
@@ -47,23 +53,22 @@ function M.render(buf)
     local col = math.min(c.col, start_len)
     local end_col = math.min(c.end_col, end_len)
     if end_row == row and end_col < col then end_col = col end
-    local o = store.hidden and {
-      end_row = end_row, end_col = end_col, right_gravity = false, end_right_gravity = true, strict = false,
-    } or {
-      end_row = end_row,
-      end_col = end_col,
-      hl_group = c.resolved and "LatexTutorResolved" or g,
-      hl_mode = "combine",
-      priority = 150,
-      right_gravity = false,
-      end_right_gravity = true,
-      sign_text = c.n < 100 and tostring(c.n) or "#",
-      sign_hl_group = c.resolved and "LatexTutorDim" or (g .. "Sign"),
-      strict = false,
-    }
-    if cfg.virtual_text and not c.resolved and not store.hidden then
-      o.virt_text = { { " " .. c.n .. " ", g .. "Badge" }, { " " .. c.title, g .. "Virt" } }
-      o.virt_text_pos = "eol"
+    local shown = not store.hidden and store.in_focus(st, c) and (not c.resolved or st.show_resolved)
+    local o = { end_row = end_row, end_col = end_col, right_gravity = false, end_right_gravity = true, strict = false }
+    if shown then
+      local active = st.active == c.id
+      o.hl_group = c.resolved and "LatexTutorResolved" or (active and g or (g .. "Soft"))
+      o.hl_mode = "combine"
+      o.priority = active and 160 or 150
+      o.sign_text = c.n < 100 and tostring(c.n) or "#"
+      o.sign_hl_group = c.resolved and "LatexTutorDim" or (g .. "Sign")
+      local vt = cfg.virtual_text
+      if not c.resolved and (vt == "all" or vt == true or (vt == "active" and active)) then
+        local status = store.status(buf, c)
+        o.virt_text = { { " " .. c.n .. " ", g .. "Badge" }, { " " .. c.title, g .. "Virt" } }
+        if status == "edited" then o.virt_text[#o.virt_text + 1] = { "  ✎ edited", "LatexTutorEdited" } end
+        o.virt_text_pos = "eol"
+      end
     end
     c.mark = api.nvim_buf_set_extmark(buf, store.ns, row, col, o)
   end
@@ -71,12 +76,11 @@ end
 
 function M.set_active(buf, c)
   if not api.nvim_buf_is_valid(buf) then return end
-  api.nvim_buf_clear_namespace(buf, ns_active, 0, -1)
-  if c then
-    api.nvim_buf_set_extmark(buf, ns_active, c.row, c.col, {
-      end_row = c.end_row, end_col = c.end_col, hl_group = "LatexTutorActive",
-      hl_mode = "combine", priority = 160, strict = false,
-    })
+  local st = store.get(buf)
+  local id = c and c.id or nil
+  if st.active ~= id then
+    st.active = id
+    M.render(buf)
   end
 end
 
@@ -197,8 +201,19 @@ local function spin_draw()
   end
 end
 
+M.on_tasks = nil -- set by the GUI to mirror the spinner
+
+-- Running tasks as { text, since (epoch seconds) }.
+function M.tasks()
+  local out = {}
+  for _, t in pairs(spin.tasks) do out[#out + 1] = { text = t.text, since = t.at } end
+  table.sort(out, function(a, b) return a.since < b.since end)
+  return out
+end
+
 function M.task_start(key, text)
-  spin.tasks[key] = { text = text, t0 = vim.uv.now() }
+  spin.tasks[key] = { text = text, t0 = vim.uv.now(), at = os.time() }
+  if M.on_tasks then M.on_tasks() end
   if not spin.timer then
     spin.timer = vim.uv.new_timer()
     spin.timer:start(0, 100, vim.schedule_wrap(spin_draw))
@@ -207,6 +222,7 @@ end
 
 function M.task_stop(key)
   spin.tasks[key] = nil
+  if M.on_tasks then vim.schedule(M.on_tasks) end
   vim.schedule(spin_draw)
 end
 

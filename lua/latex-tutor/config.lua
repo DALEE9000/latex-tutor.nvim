@@ -20,6 +20,9 @@ M.defaults = {
   global_prefs = "~/.config/latex-tutor/TUTOR.md",
 
   max_comments = 15,
+  -- true: re-reviewing a question replaces all of that question's earlier
+  -- comments; false: its resolved comments are kept.
+  fresh_review = true,
   max_lines = 1500,        -- ask before sending a range longer than this
 
   -- A "unit" (exercise) starts on any line matching one of these. Runs of
@@ -49,11 +52,20 @@ M.defaults = {
     prefs = "e",
     hide = "q",            -- hide / show everything (comments are kept)
     progress = "s",        -- progress report
+    check = "v",           -- ask the tutor whether your edits fix the open comments
+    gui = "g",             -- open the Tutor window (PDF + comment cards)
   },
 
-  panel = { width = 54, auto_open = true },
+  panel = { width = 54, auto_open = true }, -- auto_open is skipped while the GUI window is open
+  gui = {
+    python = "python3",
+    port = 0,              -- 0 = any free port
+    engine = "pdflatex",   -- builds into ~/.cache/latex-tutor/build/, never next to your files
+    window_size = "1440,920",
+    open_cmd = nil,        -- override: a command list (URL appended) or function(url)
+  },
   card = { auto = true, max_width = 84 }, -- auto: pop up when cursor lands on a comment (panel closed)
-  virtual_text = true,
+  virtual_text = "active", -- end-of-line title: "active" (comment under the cursor), "all", or false
   auto_resolve = true,     -- let the tutor close a thread when your reply/fix settles it
 
   texpresso = {

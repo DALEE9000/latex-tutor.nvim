@@ -235,7 +235,7 @@ function M.sync(buf)
     local safe = scan(lines)
     local per = {}
     store.sync(buf)
-    for _, c in ipairs(store.list(buf, { open = true })) do
+    for _, c in ipairs(store.list(buf, { open = true, focus = true })) do
       local L = target_line(safe, c.row + 1, #lines)
       if L then
         per[L] = per[L] or {}

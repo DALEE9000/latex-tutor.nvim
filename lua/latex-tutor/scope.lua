@@ -43,6 +43,18 @@ local function label_for(lines, s, e)
   return string.format("lines %d–%d", s, e)
 end
 
+-- Every unit in the buffer, in order: { s, e, label } (1-based, inclusive).
+function M.units(buf)
+  local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+  local starts = unit_starts(lines)
+  local out = {}
+  for k, st in ipairs(starts) do
+    local e = (starts[k + 1] or (#lines + 1)) - 1
+    out[#out + 1] = { s = st, e = e, label = label_for(lines, st, e) }
+  end
+  return out
+end
+
 -- Returns { s = first, e = last (1-based, inclusive), label = ... }
 function M.unit_at(buf, row1)
   local lines = api.nvim_buf_get_lines(buf, 0, -1, false)

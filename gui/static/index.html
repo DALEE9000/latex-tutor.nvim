@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaTeX Tutor</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/katex.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h12a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H9l-5 3V4z" fill="currentColor" opacity=".18"/><path d="M4 4h12a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H9l-5 3V4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 9.5h7M8.5 13h4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <span class="brand-name">Tutor</span>
+    <span class="file" id="file">—</span>
+  </div>
+  <div class="question">
+    <select id="picker" aria-label="Question"></select>
+    <span class="verdict" id="verdict" hidden></span>
+  </div>
+  <div class="progress" id="progress" hidden>
+    <div class="track"><div class="fill" id="progress-fill"></div></div>
+    <span id="progress-text"></span>
+  </div>
+  <div class="spacer"></div>
+  <span class="chip" id="status" hidden></span>
+  <div class="actions">
+    <button class="btn ghost" id="btn-all" title="Show every reviewed question (A)">All questions</button>
+    <button class="btn" id="btn-review" title="Review the question under your cursor">Review</button>
+    <button class="btn primary" id="btn-check" title="Ask the tutor whether your edits fix the open comments (V)">Check my fixes</button>
+  </div>
+</header>
+
+<main id="scroller">
+  <div class="sheet" id="sheet">
+    <div id="pages"><div class="empty" id="empty">
+      <div class="empty-title">Waiting for your document…</div>
+      <div class="empty-sub">Save the file in nvim (<kbd>:w</kbd>) to build the preview.</div>
+    </div></div>
+    <aside id="margin" aria-label="Comments"></aside>
+  </div>
+</main>
+
+<button class="sheet-toggle" id="sheet-toggle" hidden>Comments</button>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/marked.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

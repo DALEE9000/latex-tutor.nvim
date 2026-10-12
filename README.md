@@ -1,206 +1,540 @@
-# latex-tutor.nvim
+<div align="center">
 
-Google-Docs-style review comments on LaTeX solutions, inside Neovim and the
-live TeXpresso preview. The reviewer is Claude Code running headlessly
-(`claude -p`) on your **claude.ai subscription login**, so nothing is billed
-per token.
+<img src="docs/banner.svg" alt="latex-tutor.nvim: a demanding tutor for your LaTeX solutions" width="100%">
 
-- Highlighted ranges, coloured by severity (error / rigor / improve / latex / praise).
-- A numbered sign in the gutter, with the title at the end of the line.
-- A floating card with the full comment, hint and thread.
-- A sidebar listing every comment as a card, plus the overall verdict and summary.
-- Numbered badges in the TeXpresso PDF, with titles in the margin where LaTeX
-  allows. The file on disk is never modified.
-- Reply threads: tell the tutor you fixed it or argue back, and it re-reads
-  the current text and can close the comment.
-- Your tutoring preferences come from a Markdown file, `TUTOR.md`.
+<br>
 
-## Commands and keys
+**Write your solution in Neovim. Press three keys. A tutor reads it, redoes the math,<br>
+and leaves comments in the margin of your compiled PDF, one question at a time.**
 
-### How to press the keys
+<br>
 
-- `␣` means the **Space bar**. `␣cc` is three keys pressed one after
-  another: **Space**, then **c**, then **c**. Don't hold them together.
-- Press them in **normal mode**. If you're typing (insert mode), press
-  **Esc** first.
-- Press them within about a second of each other. If you pause too long,
-  Space acts on its own and moves the cursor one character.
-- Don't type `_` instead of Space. In Vim, `_ce` deletes the first word of
-  the line. If that happens, press **Esc**, then **u** to undo.
-- Every key also has a typed form, shown in the Command column. Type it
-  and press **Enter**, for example `:Tutor` then Enter. Use that if the key
-  sequence feels fiddly.
-- The keys only work in `.tex` files. The sidebar has its own one-letter
-  keys, listed below the table; press `?` in the sidebar to see them.
-- `<C-s>` means hold **Ctrl** and press **s**. `<CR>` means **Enter**.
+![Neovim](https://img.shields.io/badge/Neovim-%E2%89%A5%200.10-57A143?style=flat-square&logo=neovim&logoColor=white)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-subscription-D97757?style=flat-square&logo=anthropic&logoColor=white)
+![TeX](https://img.shields.io/badge/pdfLaTeX%20%2B%20SyncTeX-008080?style=flat-square&logo=latex&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.8%2B%20stdlib%20only-3776AB?style=flat-square&logo=python&logoColor=white)
+![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20WSL2-555?style=flat-square)
 
-The keys are defined only in `.tex` buffers. The prefix is `<localleader>c`,
-and localleader is Space in this config.
+[Features](#-features) ·
+[Requirements](#-requirements) ·
+[Install](#-install) ·
+[Quick start](#-quick-start) ·
+[Keys](#%EF%B8%8F-keys) ·
+[How it works](#-how-it-works) ·
+[FAQ](#-troubleshooting)
 
-| Key | Command | What |
-|---|---|---|
-| `␣cc` | `:Tutor` | Review the exercise under the cursor (`% QUESTION` / `\qs{…}` block) |
-| `␣cc` (visual) | `:'<,'>Tutor` | Review the selected lines |
-| `␣cf` | `:Tutor file` | Review the whole file (asks first if over 1500 lines) |
-| `␣co` | `:Tutor panel` | Toggle the comment sidebar |
-| `␣cn` / `␣cp` | `:Tutor next` / `prev` | Jump to the next/previous open comment (scrolls the PDF too) |
-| `␣ck` | | Show the card for the comment under the cursor |
-| `␣cr` | | Resolve or reopen it |
-| `␣cR` | | Reply to it (`<C-s>` sends) |
-| `␣cd` | | Delete it |
-| `␣ca` | `:Tutor pdf` | Toggle the TeXpresso annotations |
-| `␣cx` | `:Tutor cancel` | Cancel a running review |
-| `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
-| `␣cq` | `:Tutor hide` / `:Tutor show` | Hide everything (sidebar, card, highlights, PDF badges) without losing comments. A review, `␣co`, `␣cn`/`␣cp` or `␣ck` brings it back |
-| `␣cs` | `:Tutor progress` | Open your progress report (`q` closes it) |
-| | `:Tutor clear` | Drop every comment for this file |
+</div>
 
-In the sidebar: `<CR>` jump · `r` resolve · `R` reply · `dd` delete ·
-`J`/`K` next/prev card · `s` show resolved · `?` keys · `q` close.
+<br>
 
-A review takes about 30–90 s. A spinner sits in the top-right corner, and you
-can keep editing; comments are re-anchored by the text they quote.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/gui-dark.png">
+  <img src="docs/gui-light.png" alt="The Tutor window: the compiled PDF on the left with highlighted lines and numbered badges, comment cards in the right margin, the active card expanded with rendered math and a reply thread">
+</picture>
 
-## First test (about 5 minutes)
+<p align="center"><sub>The Tutor window: your compiled PDF, with comments aligned to the lines they're about.<br>
+Math in comments is rendered with KaTeX, using your own macros (<code>\E</code> → 𝔼).</sub></p>
 
-1. Restart nvim, then open a chapter, e.g.
-   `nvim ~/math/allofstats/allofstatschap5/allofstatschap5.tex`.
-   TeXpresso opens as usual.
-2. Run `:Tutor prefs` to check that `TUTOR.md` opens. Close it with `:q`.
-3. Go to an exercise, e.g. `:16` for Q 5.8.1, and press `␣cc`. A spinner
-   appears in the top-right corner. After about 30–90 s, the comments show up
-   in the gutter, the sidebar and the TeXpresso PDF.
-4. Press `␣cn` to step through the comments. Press `␣cR` on one, type a
-   reply, and send it with `<C-s>`. Press `␣cr` to resolve a comment; its
-   badge leaves the PDF.
-5. Restart nvim and reopen the file. The comments should still be there.
+<br>
 
-If the PDF breaks, press `␣ca`, which sends every line back clean. If nothing
-happens, run `:messages`.
+## ✨ Features
 
-## Progress tracking (private)
+<table>
+<tr>
+<td width="50%" valign="top">
 
-Every review and every resolved comment is logged to
-`~/.local/share/nvim/latex-tutor/progress.jsonl`. Press `␣cs` (or run
-`:Tutor progress`) to turn the log into a report. It's shown in a split and
-saved as `~/.local/share/nvim/latex-tutor/progress.md`. The report covers:
+### 🪟 A real review window
+Your document is compiled and shown as a PDF. Each comment is a card in the
+margin, next to the line it's about, as in Google Docs. Click a card and nvim
+jumps there. Double-click the PDF and nvim jumps to that source line.
 
-- **Overall:** the number of reviews, and a score on each exercise's latest
-  review. It uses the same scale as the self-study record: correct 1,
-  minor 0.8, incomplete 0.5, major issues 0. It also counts comments by
-  severity and how many you resolved.
-- **By manual and by chapter:** the score, the mix of verdicts, and the
-  number of error and rigor comments.
-- **Week by week:** reviews, average score, and errors and rigor comments
-  per review.
-- **Changed on re-review:** exercises whose verdict changed after you fixed
-  them and reviewed them again.
-- **Recent errors and rigor issues you fixed:** the patterns that keep
-  coming back.
+</td>
+<td width="50%" valign="top">
 
-This data is private because it lives outside every git repo. Your manuals
-are public GitHub repos, and a log kept inside them could be committed by
-mistake even with a `.gitignore`, for example by `git add -f`. A folder
-outside every repo can't be committed at all. The plugin's own `.gitignore`
-also excludes `progress*` as a backstop.
+### 🎯 One question at a time
+The tutor shows only the exercise your cursor is in. Each comment is one line
+until you open it. Move to another exercise and its comments appear instead.
 
-Two private files can still end up in a repo:
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-- **A per-manual `TUTOR.md`.** If you put one inside a manual's repo, keep it
-  out of git by adding it to `.git/info/exclude` in that repo. That file is a
-  local-only ignore list that never gets pushed.
-- **Saved comments.** They live in `~/.local/state/nvim/latex-tutor/`, which
-  is also outside every repo.
+### ✅ Tracks your fixes
+Each comment is **open**, **edited** (you changed the line it points at), or
+**fixed**. Press *Check my fixes* and the tutor re-reads your edits and
+closes what you actually fixed. A bar shows **3/5 fixed**.
 
-To start over, delete `progress.jsonl`.
+</td>
+<td valign="top">
 
-## Tutoring preferences (`TUTOR.md`)
+### 💬 Argue back
+Reply on any comment: "I think pairwise independence is enough here". The
+tutor answers, and closes the comment if you convinced it.
 
-The nearest `TUTOR.md`, walking up from the `.tex` file, wins. That lets one
-manual (say, the physics ones) have its own. Otherwise
-`~/.config/latex-tutor/TUTOR.md` is used. Write it in plain prose: tone, hint
-versus full answer, what to focus on, and what to ignore. It overrides the
-built-in reviewer defaults.
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-## Install / rebuild
+### 🧠 Tutoring on your terms
+A Markdown file, `TUTOR.md`, tells the tutor how you want to be taught:
+hints before answers, what to check hardest, what to ignore.
 
-The plugin is loaded by `~/.config/nvim/lua/plugins/latex-tutor.lua`:
+</td>
+<td valign="top">
+
+### 💳 On your Claude subscription
+It runs Claude Code headlessly with your claude.ai login. There's no API key
+and no per-token bill. The plugin removes API keys from the reviewer's
+environment, so it can't fall back to metered billing.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📈 Private progress report
+Each review is logged outside every git repo. `␣cs` shows your score per
+manual and per chapter, a weekly trend, and the mistakes you keep making.
+
+</td>
+<td valign="top">
+
+### ⚡ Also inside the terminal
+Without the window you get highlights, gutter numbers, a floating card and a
+sidebar checklist in nvim, plus numbered badges in the live
+[TeXpresso](https://github.com/let-def/texpresso) preview.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<div align="center">
+<img src="docs/gui-phone.png" alt="The same window at phone width: comments move into a bottom sheet" width="300">
+<br><sub>Narrow windows move the comments into a bottom sheet, and the view follows the active card.</sub>
+</div>
+
+<br>
+
+## 📋 Requirements
+
+<table>
+<tr><th></th><th>What</th><th>Version</th><th>Check it</th><th>Needed for</th></tr>
+<tr><td>✅</td><td><b>Neovim</b></td><td>≥ 0.10 (tested 0.11.4)</td><td><code>nvim --version</code></td><td>everything</td></tr>
+<tr><td>✅</td><td><b>Claude Code CLI</b>, signed in with a <b>Pro or Max</b> plan</td><td>≥ 2.1 (tested 2.1.296)</td><td><code>claude auth status</code> → <code>"authMethod": "claude.ai"</code></td><td>the reviews</td></tr>
+<tr><td>✅</td><td>A Unix shell with <code>env</code> (Linux, macOS or <b>WSL2</b>)</td><td>any</td><td><code>env --version</code></td><td>launching the reviewer</td></tr>
+<tr><td>🪟</td><td><b>Python 3</b>, standard library only</td><td>≥ 3.8</td><td><code>python3 --version</code></td><td>the Tutor window</td></tr>
+<tr><td>🪟</td><td><b>pdflatex</b> and <b>synctex</b> (any TeX Live or MacTeX)</td><td>TeX Live ≥ 2020</td><td><code>pdflatex --version</code>, <code>synctex help</code></td><td>the PDF in the window</td></tr>
+<tr><td>🪟</td><td>A Chromium browser: <b>Edge</b> (Windows, used automatically on WSL), Chrome or Chromium</td><td>any recent</td><td></td><td>the window itself</td></tr>
+<tr><td>➕</td><td><a href="https://github.com/let-def/texpresso">TeXpresso</a> + <a href="https://github.com/let-def/texpresso.vim">texpresso.vim</a></td><td>any</td><td><code>:lua print(require("texpresso"))</code></td><td>badges in the live preview (optional)</td></tr>
+<tr><td>➕</td><td>A plugin manager, e.g. <a href="https://github.com/folke/lazy.nvim">lazy.nvim</a></td><td>any</td><td><code>:Lazy</code></td><td>installing (or use <code>runtimepath</code>)</td></tr>
+</table>
+
+<sub>✅ required · 🪟 required for the Tutor window · ➕ optional</sub>
+
+> [!IMPORTANT]
+> **Your documents must compile with `pdflatex`** for the window to show them.
+> They're built into `~/.cache/latex-tutor/build/` and never next to your
+> files, so any `build/` folder you use is untouched. If you use XeLaTeX or
+> LuaLaTeX, set `gui = { engine = "xelatex" }`.
+
+<details>
+<summary><b>Installing the dependencies</b> (Ubuntu / WSL2 · macOS)</summary>
+
+<br>
+
+**Neovim ≥ 0.10.** Ubuntu's apt package is usually too old. Use the official
+release:
+
+```bash
+# Ubuntu / WSL2
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
+sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
+echo 'export PATH="/opt/nvim-linux-x86_64/bin:$PATH"' >> ~/.bashrc
+
+# macOS
+brew install neovim
+```
+
+**Claude Code**, then sign in with your Claude account. Choose the
+**Claude.ai subscription** option, not an API key:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash   # or: npm install -g @anthropic-ai/claude-code
+claude                                            # sign in once, then /exit
+claude auth status                                # must say "authMethod": "claude.ai"
+```
+
+**TeX with SyncTeX** (`synctex` comes with TeX Live):
+
+```bash
+sudo apt install texlive-latex-extra texlive-science   # Ubuntu / WSL2: pdflatex + synctex + common packages
+brew install --cask mactex-no-gui                       # macOS
+```
+
+**Python 3:** already present on Ubuntu and macOS (`python3 --version`).
+
+**TeXpresso (optional):** follow the
+[TeXpresso build guide](https://github.com/let-def/texpresso#building), then
+install the `let-def/texpresso.vim` plugin. On **WSL2**, the viewer needs
+software rendering or its window stays blank:
 
 ```lua
+require("texpresso").env = { SDL_RENDER_DRIVER = "software", LIBGL_ALWAYS_SOFTWARE = "1" }
+```
+
+</details>
+
+<br>
+
+## 📦 Install
+
+**lazy.nvim:**
+
+```lua
+-- ~/.config/nvim/lua/plugins/latex-tutor.lua
 return {
-  dir = vim.fn.expand("~/latex-tutor.nvim"),
-  name = "latex-tutor",
-  lazy = false,
+  "DALEE9000/latex-tutor.nvim",
+  ft = "tex",
   config = function()
-    require("latex-tutor").setup({ model = "opus" }) -- options: lua/latex-tutor/config.lua
+    require("latex-tutor").setup({
+      model = "opus", -- or "sonnet" to use less of your plan's quota
+    })
   end,
 }
 ```
 
-There's no build step. After editing the plugin, restart nvim or run
-`:Lazy reload latex-tutor`.
+<details>
+<summary>Local clone / no plugin manager</summary>
 
-Requirements: Neovim ≥ 0.10 and the `claude` CLI logged in with your claude.ai
-account. Check with `claude auth status`, which should show
-`"authMethod": "claude.ai"`.
+```lua
+-- in init.lua
+vim.opt.runtimepath:prepend(vim.fn.expand("~/latex-tutor.nvim"))
+require("latex-tutor").setup({})
+```
 
-## How it works
+</details>
 
-- **Subscription, not API.** The plugin runs
+**Set localleader** if you haven't. Every key below is `<localleader>c…`, and
+this README writes it as `␣c…`, assuming localleader is Space:
+
+```lua
+vim.g.maplocalleader = " "   -- before lazy.nvim loads
+```
+
+**Write your tutoring preferences.** Copy the example and edit it:
+
+```bash
+mkdir -p ~/.config/latex-tutor
+cp ~/.local/share/nvim/lazy/latex-tutor.nvim/examples/TUTOR.md ~/.config/latex-tutor/TUTOR.md
+```
+
+A `TUTOR.md` in a project folder overrides the global one for files under it.
+The nearest one walking up from the `.tex` file wins.
+
+**Update / rebuild:** there is no build step. Run `:Lazy update latex-tutor.nvim`,
+or after editing a local clone, `:Lazy reload latex-tutor.nvim` (or restart nvim).
+
+<br>
+
+## 🚀 Quick start
+
+1. **Open a solution:** `nvim chapter5.tex`.
+2. **Open the Tutor window:** <kbd>Space</kbd> <kbd>c</kbd> <kbd>g</kbd>. It
+   builds your PDF, which takes a few seconds the first time.
+3. **Put your cursor in an exercise and review it:** <kbd>Space</kbd> <kbd>c</kbd> <kbd>c</kbd>.
+   A review takes 30–90 s, and you can keep working meanwhile.
+4. **Read the comments.** Click a card, or press <kbd>Space</kbd> <kbd>c</kbd> <kbd>n</kbd>
+   in nvim. Try the hint before the suggested fix.
+5. **Fix your solution, save** (`:w`), then press **Check my fixes**
+   (<kbd>Space</kbd> <kbd>c</kbd> <kbd>v</kbd>). Fixed comments turn green.
+
+> [!TIP]
+> An exercise starts at a line matching `% QUESTION`, `\qs{…}`,
+> `\begin{exercise}`, `\begin{problem}` or `\begin{question}`. To add your own
+> markers, see `unit_patterns` in [Configuration](#%EF%B8%8F-configuration). You can
+> also select lines visually and press <kbd>Space</kbd> <kbd>c</kbd> <kbd>c</kbd>.
+
+<br>
+
+## ⌨️ Keys
+
+### How to press them
+
+* `␣` means the **Space bar**. `␣cc` is three keys pressed **one after
+  another**: <kbd>Space</kbd>, then <kbd>c</kbd>, then <kbd>c</kbd>. Don't hold
+  them together.
+* Press them in **normal mode**. If you're typing, press <kbd>Esc</kbd> first.
+* Press them **within about a second**. If you pause too long, Space acts on
+  its own and moves the cursor one character.
+* **Don't type `_` for Space.** `_ce` deletes the first word of the line. If
+  that happens, press <kbd>Esc</kbd> then <kbd>u</kbd> to undo.
+* Every key also has a **typed form**: type `:Tutor`, then Enter.
+* `<C-s>` means hold <kbd>Ctrl</kbd> and press <kbd>s</kbd>.
+
+### In a `.tex` file
+
+| | Key | Command | What it does |
+|:-:|---|---|---|
+| 🔍 | `␣cc` | `:Tutor` | **Review** the exercise under the cursor (visual mode: the selection) |
+| | `␣cf` | `:Tutor file` | Review the whole file |
+| | `␣cx` | `:Tutor cancel` | Cancel a running review |
+| 🪟 | `␣cg` | `:Tutor gui` | Open the **Tutor window** |
+| 🧭 | `␣cn` / `␣cp` | `:Tutor next` / `prev` | Next / previous comment |
+| | `␣ck` | | Show the comment under the cursor |
+| ✅ | `␣cv` | `:Tutor check` | **Check my fixes**: the tutor re-reads your edits |
+| | `␣cr` | | Resolve / reopen a comment |
+| | `␣cR` | | Reply to a comment (<kbd>Ctrl</kbd>+<kbd>s</kbd> sends) |
+| | `␣cd` | | Delete a comment |
+| 👁 | `␣co` | `:Tutor panel` | Terminal sidebar with the comment checklist |
+| | `␣cq` | `:Tutor hide` / `show` | Hide everything; comments are kept |
+| | `␣ca` | `:Tutor pdf` | TeXpresso badges on / off |
+| 📈 | `␣cs` | `:Tutor progress` | Progress report |
+| ⚙️ | `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
+| | | `:Tutor clear` | Delete every comment in this file |
+
+### In the Tutor window
+
+| Key / action | What it does |
+|---|---|
+| Click a card or highlight | Open it, and move the nvim cursor there |
+| Double-click the PDF | Jump nvim to that source line (SyncTeX) |
+| <kbd>J</kbd> / <kbd>K</kbd> | Next / previous comment |
+| <kbd>R</kbd> | Resolve / reopen the open comment |
+| <kbd>V</kbd> | Check my fixes |
+| <kbd>A</kbd> | All reviewed questions ↔ just this one |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send a reply |
+| Question menu (top left) | Jump to another exercise |
+
+### In the terminal sidebar (`␣co`)
+
+<kbd>Enter</kbd> opens a comment, and pressing it again jumps to it ·
+<kbd>r</kbd> resolve · <kbd>R</kbd> reply · <kbd>dd</kbd> delete ·
+<kbd>J</kbd>/<kbd>K</kbd> next/prev · <kbd>v</kbd> check fixes ·
+<kbd>a</kbd> all questions · <kbd>?</kbd> help · <kbd>q</kbd> close
+
+<br>
+
+## 🔁 The workflow
+
+```mermaid
+flowchart LR
+    A["✍️ Write a solution"] --> B["␣cc  Review"]
+    B --> C["💬 Comments<br/>on that question"]
+    C --> D{"Agree?"}
+    D -- yes --> E["✏️ Fix it<br/>(status: edited)"]
+    D -- no --> F["↩️ Reply<br/>argue your case"]
+    F --> C
+    E --> G["␣cv  Check my fixes"]
+    G -- fixed --> H["✅ Resolved"]
+    G -- not yet --> C
+    H --> I["📈 Progress log"]
+```
+
+<br>
+
+## 🔧 How it works
+
+```mermaid
+flowchart LR
+    subgraph nvim["Neovim"]
+      P["latex-tutor.nvim"]
+    end
+    P -- "prompt on stdin<br/>JSON schema" --> C["claude -p<br/>(your subscription)"]
+    C -- "verdict + comments<br/>(structured JSON)" --> P
+    P -- "state, JSON lines" --> S["gui/server.py<br/>127.0.0.1 only"]
+    S -- "pdflatex -synctex=1" --> B[("~/.cache/latex-tutor/build")]
+    S -- "SSE" --> W["Tutor window<br/>pdf.js + KaTeX"]
+    W -- "clicks" --> S
+    S -- "actions" --> P
+    P -. "change-lines" .-> T["TeXpresso (optional)"]
+```
+
+* **Billed to your subscription, not the API.** The reviewer runs as
   `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p --output-format json --json-schema …`.
-  With the API-key variables removed, the CLI can only use your OAuth login.
-  `--bare` is deliberately *not* used, because it forces API-key auth. The
-  `total_cost_usd` field in the CLI's JSON is an estimate and isn't charged on
-  a subscription. Reviews do count toward your plan's usage limits.
-- **Structured output.** `--json-schema` makes Claude return
+  With the API-key variables removed, Claude Code can only use your claude.ai
+  login. `--bare` is deliberately **not** used, because it forces API-key auth.
+  The `total_cost_usd` the CLI prints is an estimate and isn't charged. Reviews
+  do count toward your plan's usage limits. If you've turned on *extra usage*
+  at claude.ai → Settings, usage past your plan limit can be billed there.
+* **Structured output.** `--json-schema` makes the model return
   `{verdict, summary, comments:[{line, quote, severity, title, body, hint, fix, confidence}]}`.
-  Each comment is anchored by searching for its `quote` near `line`. If the
-  quote isn't found, the plugin falls back to highlighting the whole line.
-- **Context.** Claude gets the exercise with line numbers, plus your
-  preferences. It runs in the manual root (the directory holding `header*.tex`)
-  with read-only `Read/Grep/Glob`, so it can look up your macros or an exercise
-  you cite. The usual `CLAUDE.md` files load as well.
-- **Positions** live in extmarks, so comments move with your edits. State is
-  saved to `~/.local/state/nvim/latex-tutor/`, never next to your `.tex`
-  files.
-- **TeXpresso.** TeXpresso renders whatever text nvim sends it. For each
-  commented line, the plugin sends an annotated copy (`change-lines`, with the
-  same line count) carrying a self-defining `\tutormarkN{rgb}{n}{title}` macro.
-  The `.tex` file and the nvim buffer are never changed. Resolving a comment
-  sends the original line back. A scanner keeps badges out of preambles,
-  verbatim/TikZ/lstlisting blocks, moving arguments (`\section{}`, `\caption{}`),
-  key-value groups (`\tikzset{…}`) and lists before their first `\item`. A
-  badge that can't go on its own line moves to the nearest safe line above it.
-  Margin notes are suppressed inside boxes, minipages and floats. This was
-  checked by badging every safe line of every chapter in `~/math` and
-  `~/physics` and compiling each with pdflatex. All 19 chapters compiled.
-  `texpresso.lua` is not modified; the plugin only calls `send()` and wraps
-  `reload()`/`launch()`.
-- If the preview ever misbehaves, press `␣ca` to switch annotations off. That
-  sends every annotated line back verbatim.
+  Each comment is anchored by finding its `quote` near `line`, and extmarks
+  then keep it attached as you edit.
+* **Context.** The tutor sees the exercise with line numbers, plus your
+  `TUTOR.md`. It runs in your project root (the folder holding `header*.tex`,
+  or the git root) with **read-only** `Read/Grep/Glob`, so it can look up
+  your macros or an exercise you cite. It can't edit anything.
+* **Edit tracking.** At review time each comment stores the text of its
+  lines. If the text changes, the comment becomes **edited**. *Check my fixes*
+  sends the current text plus the open comments, and gets back
+  `fixed / partly / not_fixed` with a short note for each.
+* **The window** is a ~400-line Python standard-library server, started and
+  stopped by nvim. It compiles with `pdflatex -synctex=1`, maps each comment's
+  lines to page rectangles with `synctex view`, and streams updates to the
+  page with Server-Sent Events. It listens only on `127.0.0.1` and rejects
+  cross-origin requests. pdf.js, KaTeX and marked are bundled under
+  `gui/static/vendor/`, so it works offline. KaTeX gets your
+  `\newcommand`/`\DeclareMathOperator` macros from `header*.tex`.
+* **TeXpresso badges.** For each commented line, the plugin sends TeXpresso an
+  annotated copy (`change-lines`, with the same line count) carrying a
+  self-defining `\tutormarkN{rgb}{n}{title}` macro. **Your file and buffer are
+  never modified.** A scanner keeps badges out of preambles, verbatim/TikZ
+  blocks, moving arguments, key-value groups and empty lists. It was tested by
+  badging every eligible line of 19 real chapters and compiling each one. The
+  document must load `xcolor`. `␣ca` turns the badges off.
 
-## Files
+<br>
+
+## ⚙️ Configuration
+
+All options with their defaults. Pass only what you want to change to `setup()`.
+
+```lua
+require("latex-tutor").setup({
+  claude_cmd = "claude",
+  model = "opus",               -- any `claude --model` alias or id; "sonnet" uses less quota
+  effort = nil,                 -- nil = CLI default, or "low" … "max"
+  tools = { "Read", "Grep", "Glob" }, -- read-only lookups; {} disables tools
+  timeout_ms = 15 * 60 * 1000,
+
+  prefs_filename = "TUTOR.md",  -- nearest one walking up from the .tex file wins
+  global_prefs = "~/.config/latex-tutor/TUTOR.md",
+
+  max_comments = 15,
+  fresh_review = true,          -- re-reviewing a question replaces its old comments
+  max_lines = 1500,             -- ask before sending more than this
+
+  unit_patterns = {             -- what starts an exercise (Lua patterns)
+    "^%s*%%+%s*QUESTION", "^%s*\\qs%s*{",
+    "^%s*\\begin{exercise", "^%s*\\begin{problem", "^%s*\\begin{question",
+  },
+  section_patterns = { "^%s*\\chapter", "^%s*\\section", "^%s*\\subsection" },
+
+  keymaps = {
+    prefix = "<localleader>c",
+    review = "c", review_file = "f", panel = "o", next = "n", prev = "p",
+    card = "k", resolve = "r", reply = "R", delete = "d", pdf = "a",
+    cancel = "x", prefs = "e", hide = "q", progress = "s", check = "v", gui = "g",
+  },
+
+  gui = {
+    python = "python3",
+    port = 0,                   -- 0 = any free port
+    engine = "pdflatex",        -- or "xelatex" / "lualatex"
+    window_size = "1440,920",
+    open_cmd = nil,             -- { "firefox" } or function(url) … end to override
+  },
+  panel = { width = 54, auto_open = true },   -- terminal sidebar
+  card = { auto = true, max_width = 84 },     -- terminal pop-up card
+  virtual_text = "active",      -- end-of-line title: "active", "all" or false
+  auto_resolve = true,          -- let the tutor close a thread you settled in a reply
+
+  texpresso = { annotate = true, margin_notes = true, sync_on_jump = true },
+})
+```
+
+<br>
+
+## 🔒 Where things are saved
+
+Nothing is written next to your `.tex` files.
+
+| What | Where | In a git repo? |
+|---|---|---|
+| Comments, per file | `~/.local/state/nvim/latex-tutor/*.json` | No |
+| Progress log + report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |
+| Compiled PDFs for the window | `~/.cache/latex-tutor/build/` | No |
+| Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
+| Reply threads | Claude Code's own session history (`~/.claude/`) | No |
+
+> [!NOTE]
+> A **per-project `TUTOR.md`** lives in that project's folder, so it **would**
+> be committed with it. To keep it private without touching the project's
+> `.gitignore`, add it to that repo's local-only ignore list:
+> `echo TUTOR.md >> .git/info/exclude`.
+
+<br>
+
+## 🩺 Troubleshooting
+
+<details>
+<summary><b>The window opens but says "Waiting for your document…"</b></summary>
+
+Save the file (`:w`). The PDF builds on save. If the chip in the top bar
+shows **PDF: …**, the build failed with that LaTeX error. Check that
+`pdflatex yourfile.tex` works from the file's folder, or set `gui.engine`.
+</details>
+
+<details>
+<summary><b>The window doesn't open on WSL</b></summary>
+
+The plugin runs `cmd.exe /c start msedge --app=URL`, and WSL2 forwards
+`127.0.0.1` to Windows. If interop is disabled, open the URL that nvim prints
+(`:messages`) in any Windows browser. You can also set
+`gui = { open_cmd = function(url) … end }`.
+</details>
+
+<details>
+<summary><b>Nothing happens when I press <code>␣cc</code></b></summary>
+
+Check that localleader is Space (`:echo maplocalleader` shows a blank). Then
+run `:Tutor` directly and look at `:messages`. Run `claude auth status` in a
+shell to check you're logged in.
+</details>
+
+<details>
+<summary><b>"claude failed: …" or a review never finishes</b></summary>
+
+Run `claude -p "hi"` in a terminal. If it asks you to log in or reports a
+usage limit, that's the cause. `␣cx` cancels a stuck review. Reviews time out
+after 15 minutes.
+</details>
+
+<details>
+<summary><b>The TeXpresso preview shows an error after a review</b></summary>
+
+Press `␣ca` to send every line back unannotated, and please open an issue
+with the line. Your file was never changed.
+</details>
+
+<details>
+<summary><b>Comments point at the wrong line</b></summary>
+
+Comments follow your edits through extmarks. If you edited the file outside
+nvim, they're re-anchored by the text they quote when the file is next
+opened. Comments whose text can't be found are marked *text changed*.
+</details>
+
+<br>
+
+## 🗂️ Project layout
 
 ```
 lua/latex-tutor/
-  init.lua     commands, keymaps, review/reply flow, autocmds
-  config.lua   defaults + severities
-  claude.lua   headless claude runner (subscription auth)
-  prompt.lua   system prompt, JSON schemas, TUTOR.md lookup
-  scope.lua    exercise / selection / file ranges
-  store.lua    comments, extmark sync, quote re-anchoring, persistence
-  ui.lua       highlights, signs, card, spinner, reply composer
-  panel.lua    sidebar
-  pdf.lua      TeXpresso annotation bridge
-  progress.lua private progress log + report
+  init.lua      commands, keymaps, review / reply / check flow, focus tracking
+  config.lua    defaults and severities
+  claude.lua    headless `claude -p` runner (subscription auth)
+  prompt.lua    system prompt, JSON schemas, TUTOR.md lookup
+  scope.lua     exercise / selection / file ranges
+  store.lua     comments, extmark sync, status, persistence
+  ui.lua        in-buffer highlights, signs, card, spinner, reply box
+  panel.lua     terminal sidebar checklist
+  gui.lua       Tutor window: server lifecycle, state, actions
+  pdf.lua       TeXpresso annotation bridge
+  progress.lua  private progress log and report
+gui/
+  server.py     local HTTP + SSE server, pdflatex + SyncTeX
+  static/       the window: index.html, app.js, style.css, vendor/
+examples/TUTOR.md
 ```
 
-## Where things are saved
+<br>
 
-| What | Where | In git? |
-|---|---|---|
-| Plugin code | `~/latex-tutor.nvim/` | Local repo only (not pushed) |
-| Plugin loader | `~/.config/nvim/lua/plugins/latex-tutor.lua` | |
-| Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
-| Comments per file | `~/.local/state/nvim/latex-tutor/*.json` | No |
-| Progress log / report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |
+<div align="center">
+<sub>Built for a self-study workflow of writing complete solutions manuals in LaTeX.<br>
+AI review is inconsistent in both directions, so each comment shows how confident the tutor is.</sub>
+</div>

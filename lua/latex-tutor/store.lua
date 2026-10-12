@@ -20,7 +20,10 @@ function M.get(buf)
   buf = resolve_buf(buf)
   local st = M.bufs[buf]
   if not st then
-    st = { comments = {}, summaries = {}, next_n = 1, show_resolved = false, loaded = false }
+    -- focus: the question under the cursor ({ s, e, label }, 1-based); only its
+    -- comments are drawn. active: id of the comment under the cursor.
+    st = { comments = {}, summaries = {}, next_n = 1, show_resolved = false, loaded = false,
+      focus = nil, active = nil, show_all = false }
     M.bufs[buf] = st
   end
   return st
@@ -95,7 +98,15 @@ local function by_position(a, b)
   return a.n < b.n
 end
 
--- Sorted list. opts.open = only unresolved; opts.visible = respects show_resolved.
+-- True if comment `c` lies in the focused question (or nothing is focused).
+function M.in_focus(st, c)
+  local f = st.focus
+  if not f or st.show_all then return true end
+  return c.row + 1 >= f.s and c.row + 1 <= f.e
+end
+
+-- Sorted list. opts.open = only unresolved; opts.visible = respects show_resolved;
+-- opts.focus = only the focused question's comments.
 function M.list(buf, opts)
   opts = opts or {}
   local st = M.get(buf)
@@ -104,6 +115,7 @@ function M.list(buf, opts)
     local keep = true
     if opts.open and c.resolved then keep = false end
     if opts.visible and c.resolved and not st.show_resolved then keep = false end
+    if opts.focus and not M.in_focus(st, c) then keep = false end
     if keep then out[#out + 1] = c end
   end
   table.sort(out, by_position)
@@ -113,7 +125,7 @@ end
 -- Comment covering the cursor (0-based row). Prefers one containing `col`.
 function M.at(buf, row, col)
   local best
-  for _, c in ipairs(M.list(buf, { visible = true })) do
+  for _, c in ipairs(M.list(buf, { visible = true, focus = true })) do
     if row >= c.row and row <= c.end_row then
       local inside = (row > c.row or col >= c.col) and (row < c.end_row or col < math.max(c.end_col, c.col + 1))
       if inside then return c end
@@ -125,12 +137,25 @@ end
 
 function M.add(buf, c)
   local st = M.get(buf)
-  c.id = c.id or string.format("%d-%d", os.time(), st.next_n)
+  c.id = c.id or string.format("%d-%d-%d", os.time(), st.next_n, math.random(1e6))
   c.n = c.n or st.next_n
   st.next_n = math.max(st.next_n, c.n) + 1
   c.thread = c.thread or {}
   st.comments[c.id] = c
   return c
+end
+
+-- Current text of the lines a comment covers.
+function M.text(buf, c)
+  return table.concat(api.nvim_buf_get_lines(buf, c.row, c.end_row + 1, false), "\n")
+end
+
+-- "fixed" (resolved), "edited" (its lines changed since the review or the
+-- last check) or "open".
+function M.status(buf, c)
+  if c.resolved then return "fixed" end
+  if c.orig and M.text(buf, c) ~= c.orig then return "edited" end
+  return "open"
 end
 
 function M.remove(buf, id)

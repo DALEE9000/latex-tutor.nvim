@@ -5,6 +5,7 @@
 local api = vim.api
 local config = require("latex-tutor.config")
 local store = require("latex-tutor.store")
+local scope = require("latex-tutor.scope")
 local M = { win = nil, buf = nil, src = nil, rows = {}, spans = {}, help = false, active = nil }
 
 local ns = api.nvim_create_namespace("latex_tutor_panel")
@@ -57,6 +58,44 @@ local verdict_text = {
   major_issues = "✗ major issues", incomplete = "… incomplete",
 }
 
+local status_icon = { open = "○", edited = "✎", fixed = "✓", praise = "★" }
+local status_hl = { open = "LatexTutorOpen", edited = "LatexTutorEdited", fixed = "LatexTutorFixed",
+  praise = "LatexTutorPraiseSign" }
+
+-- Praise isn't something to fix, so it has its own status and doesn't count.
+local function status_of(src, c)
+  if c.severity == "praise" then return "praise" end
+  return store.status(src, c)
+end
+
+local function keyname(k)
+  local p = config.get().keymaps.prefix:gsub("<localleader>", vim.g.maplocalleader == " " and "␣" or "‹ll›")
+  return p .. k
+end
+
+-- Latest summary per question label.
+local function summary_for(st, label)
+  for i = #st.summaries, 1, -1 do
+    if st.summaries[i].label == label then return st.summaries[i] end
+  end
+end
+
+-- "▰▰▱▱▱ 2/5 fixed · 1 edited"
+local function progress_line(src, list)
+  local fixed, edited, total = 0, 0, 0
+  for _, c in ipairs(list) do
+    local s = status_of(src, c)
+    if s ~= "praise" then total = total + 1 end
+    if s == "fixed" then fixed = fixed + 1 elseif s == "edited" then edited = edited + 1 end
+  end
+  local slots = math.min(total, 10)
+  local filled = total > 0 and math.floor(fixed / total * slots + 0.5) or 0
+  local bar = string.rep("▰", filled) .. string.rep("▱", slots - filled)
+  local text = string.format("%d/%d fixed", fixed, total)
+  if edited > 0 then text = text .. string.format(" · %d edited", edited) end
+  return bar, text, fixed, total
+end
+
 function M.render()
   if not M.is_open() then return end
   local src = M.src
@@ -64,10 +103,10 @@ function M.render()
   local lines, hls = {}, {}
   M.rows, M.spans = {}, {}
 
-  local function add(text, group, id)
+  local function add(text, group, target)
     lines[#lines + 1] = text
     if group then hls[#hls + 1] = { #lines - 1, 0, -1, group } end
-    if id then M.rows[#lines] = id end
+    if target then M.rows[#lines] = target end
   end
   local function hl(col_s, col_e, group)
     hls[#hls + 1] = { #lines - 1, col_s, col_e, group }
@@ -84,49 +123,48 @@ function M.render()
     hl(7, -1, "LatexTutorTitle")
 
     if M.help then
-      local p = config.get().keymaps
       for _, l in ipairs({
-        "<CR> jump   r resolve   R reply   dd delete",
-        "J/K next/prev card   s show resolved   q close",
-        string.format("in .tex: %s%s review exercise · %s%s file", p.prefix, p.review, p.prefix, p.review_file),
+        "<CR> open/jump · r resolve · R reply · dd delete",
+        "J/K next/prev · a all questions · s show resolved in file · q close",
+        string.format("%s review · %s next · %s check fixes · %s hide", keyname(config.get().keymaps.review),
+          keyname(config.get().keymaps.next), keyname(config.get().keymaps.check), keyname(config.get().keymaps.hide)),
+        "○ open · ✎ you edited it · ✓ fixed",
       }) do
         for _, w in ipairs(wrap(l, width - 1)) do add(" " .. w, "LatexTutorDim") end
       end
     end
 
-    for i = #st.summaries, math.max(1, #st.summaries - 2), -1 do
-      local s = st.summaries[i]
-      add("")
-      local head = string.format("%s · %s · %s", s.label, verdict_text[s.verdict] or s.verdict or "", ago(s.at))
-      for _, w in ipairs(wrap(head, width - 2)) do add(" " .. w, "LatexTutorTitle") end
-      for _, w in ipairs(wrap(s.summary, width - 2)) do add(" " .. w, "LatexTutorDim") end
-    end
-
-    local all = store.list(src)
-    local open, shown = 0, store.list(src, { visible = true })
-    for _, c in ipairs(all) do if not c.resolved then open = open + 1 end end
-    add("")
-    add(string.format(" %d open · %d resolved%s", open, #all - open,
-      st.show_resolved and " (shown)" or ""), "LatexTutorDim")
-    if #shown == 0 then
-      add("")
-      add(#st.summaries == 0 and " No comments yet." or " Nothing open. ", "LatexTutorDim")
-      add(" " .. config.get().keymaps.prefix .. config.get().keymaps.review .. " reviews the exercise under the cursor.", "LatexTutorDim")
-    end
-
-    for _, c in ipairs(shown) do
+    -- One comment: a single line, or the full card when it's the active one.
+    local function comment(c)
       local g = config.group(c.severity)
-      local bar = c.resolved and "LatexTutorDim" or (g .. "Bar")
+      local status = status_of(src, c)
+      local active = st.active == c.id
       local first = #lines + 1
-      add("")
+      if not active then
+        local head = string.format(" %s %d ", status_icon[status], c.n)
+        local room = width - vim.fn.strdisplaywidth(head)
+        local title = c.title
+        if vim.fn.strdisplaywidth(title) > room then
+          title = vim.fn.strcharpart(title, 0, math.max(1, room - 1)) .. "…"
+        end
+        add(head .. title, nil, c.id)
+        local icon_end = #(" " .. status_icon[status])
+        hl(0, icon_end, status_hl[status])
+        hl(icon_end + 1, #head, status == "fixed" and "LatexTutorDim" or (g .. "Sign"))
+        hl(#head, -1, status == "fixed" and "LatexTutorDim" or nil)
+        M.spans[c.id] = { first - 1, #lines }
+        return
+      end
+      if lines[#lines] ~= "" then add("") end
+      local bar = status == "fixed" and "LatexTutorDim" or (g .. "Bar")
       local head = string.format("▎ %d  %s · L%d", c.n, config.sev(c.severity).label:upper(), c.row + 1)
-      local tail = (c.resolved and "✓ " or "") .. (c.confidence or "")
+      local tail = status_icon[status] .. " " .. status .. (c.confidence and (" · " .. c.confidence) or "")
       local pad = math.max(1, width - vim.fn.strdisplaywidth(head) - vim.fn.strdisplaywidth(tail))
       add(head .. string.rep(" ", pad) .. tail, nil, c.id)
       hl(0, #"▎", bar)
-      hl(#"▎ ", #"▎ " + #tostring(c.n), c.resolved and "LatexTutorDim" or (g .. "Badge"))
-      hl(#"▎ " + #tostring(c.n), #head, c.resolved and "LatexTutorDim" or (g .. "Sign"))
-      hl(#head, -1, "LatexTutorDim")
+      hl(#"▎ ", #"▎ " + #tostring(c.n), status == "fixed" and "LatexTutorDim" or (g .. "Badge"))
+      hl(#"▎ " + #tostring(c.n), #head, status == "fixed" and "LatexTutorDim" or (g .. "Sign"))
+      hl(#head + pad, -1, status_hl[status])
       local function body(text, group, prefix)
         prefix = prefix or ""
         for k, w in ipairs(wrap(text, width - 2 - vim.fn.strdisplaywidth(prefix))) do
@@ -135,19 +173,105 @@ function M.render()
           if group then hl(#"▎ ", -1, group) end
         end
       end
-      body(c.title, c.resolved and "LatexTutorDim" or "LatexTutorTitle")
-      if not c.resolved then
-        body(c.body)
-        if c.hint and c.hint ~= "" then body(c.hint, "LatexTutorDim", "Hint: ") end
-        if c.fix and c.fix ~= "" then body(c.fix, "LatexTutorDim", "Fix: ") end
-        if c.moved then body("(the quoted text changed since this review)", "LatexTutorDim") end
-      end
+      body(c.title, "LatexTutorTitle")
+      body(c.body)
+      if c.hint and c.hint ~= "" then body(c.hint, "LatexTutorDim", "Hint: ") end
+      if c.fix and c.fix ~= "" then body(c.fix, "LatexTutorDim", "Fix: ") end
+      if c.moved then body("(the quoted text changed since this review)", "LatexTutorDim") end
       for _, t in ipairs(c.thread or {}) do
         body(t.text, t.role == "you" and nil or "LatexTutorDim", t.role == "you" and "↳ You: " or "↳ Tutor: ")
       end
       if c.pending then body("tutor is thinking…", "LatexTutorDim", "↳ ") end
-      M.spans[c.id] = { first, #lines }
+      if status == "edited" and not c.pending then
+        body(string.format("You edited this. %s asks the tutor to check.", keyname(config.get().keymaps.check)),
+          "LatexTutorEdited")
+      end
+      add("")
+      M.spans[c.id] = { first - 1, #lines }
     end
+
+    -- One question: header, progress, summary (focused only), comments.
+    local function question(label, list, sum, focused)
+      add("")
+      local head = label
+      if sum then head = head .. " · " .. (verdict_text[sum.verdict] or sum.verdict or "") end
+      for _, w in ipairs(wrap(head, width - 2)) do add(" " .. w, "LatexTutorTitle") end
+      local bar, text, _, total = progress_line(src, list)
+      if total > 0 then
+        add(" " .. bar .. " " .. text)
+        hl(1, 1 + #bar, "LatexTutorFixed")
+        hl(1 + #bar, -1, "LatexTutorDim")
+      end
+      if focused and sum then
+        for _, w in ipairs(wrap(sum.summary .. " (" .. ago(sum.at) .. ")", width - 2)) do add(" " .. w, "LatexTutorDim") end
+      end
+      if #list > 0 then add("") end
+      for _, c in ipairs(list) do comment(c) end
+    end
+
+    local units = scope.units(src)
+    local function unit_of(row1)
+      for i = #units, 1, -1 do
+        if units[i].s <= row1 then return units[i] end
+      end
+    end
+    -- Group comments by the question they sit in.
+    local groups, order = {}, {}
+    for _, c in ipairs(store.list(src)) do
+      local u = unit_of(c.row + 1)
+      local key = u and u.label or "(before the first question)"
+      if not groups[key] then groups[key] = { list = {}, s = u and u.s or 1 }; order[#order + 1] = key end
+      table.insert(groups[key].list, c)
+    end
+    for _, sm in ipairs(st.summaries) do
+      if not groups[sm.label] then
+        local s_line
+        for _, u in ipairs(units) do if u.label == sm.label then s_line = u.s; break end end
+        if s_line then groups[sm.label] = { list = {}, s = s_line }; order[#order + 1] = sm.label end
+      end
+    end
+    table.sort(order, function(x, y) return groups[x].s < groups[y].s end)
+
+    local f = st.focus
+    if st.show_all then
+      add("")
+      add(" All questions in this file (a: just this one)", "LatexTutorDim")
+      for _, key in ipairs(order) do
+        question(key, groups[key].list, summary_for(st, key), f and f.label == key)
+      end
+    else
+      local label = f and f.label or "?"
+      local list = store.list(src, { focus = true })
+      local sum = summary_for(st, label)
+      if #list == 0 and not sum then
+        add("")
+        for _, w in ipairs(wrap(label .. " · not reviewed yet", width - 2)) do add(" " .. w, "LatexTutorTitle") end
+        add(" " .. keyname(config.get().keymaps.review) .. " reviews it.", "LatexTutorDim")
+      else
+        question(label, list, sum, true)
+        if sum and #list == 0 then add(" No comments: nothing to fix.", "LatexTutorDim") end
+      end
+      -- Index of the other reviewed questions, one line each.
+      local others = {}
+      for _, key in ipairs(order) do if key ~= label then others[#others + 1] = key end end
+      if #others > 0 then
+        add("")
+        add(" Other reviewed questions", "LatexTutorDim")
+        for _, key in ipairs(others) do
+          local g = groups[key]
+          local sum2 = summary_for(st, key)
+          local _, text, fixed, total = progress_line(src, g.list)
+          local mark = (total > 0 and fixed == total) and "✓" or "·"
+          local line = string.format(" %s %s  %s", mark, key, total > 0 and text or ((sum2 and verdict_text[sum2.verdict]) or ""))
+          add(line, nil, { line = g.s })
+          hl(0, #(" " .. mark), mark == "✓" and "LatexTutorFixed" or "LatexTutorDim")
+          hl(#(" " .. mark .. " " .. key), -1, "LatexTutorDim")
+        end
+      end
+    end
+    add("")
+    add(string.format(" %s next · %s check fixes · ? keys", keyname(config.get().keymaps.next),
+      keyname(config.get().keymaps.check)), "LatexTutorDim")
   end
 
   vim.bo[M.buf].modifiable = true
@@ -157,11 +281,11 @@ function M.render()
   for _, h in ipairs(hls) do
     local len = #(lines[h[1] + 1] or "")
     local e = h[3] == -1 and len or math.min(h[3], len)
-    if h[2] < e then
+    if h[4] and h[2] < e then
       api.nvim_buf_set_extmark(M.buf, ns, h[1], h[2], { end_col = e, hl_group = h[4], priority = 100 })
     end
   end
-  M.highlight(M.active, false)
+  M.highlight(src and api.nvim_buf_is_valid(src) and store.get(src).active or nil, false)
 end
 
 -- Highlight a card and, if `scroll`, bring it into view without focusing.
@@ -188,7 +312,12 @@ end
 
 local function comment_under_cursor()
   local id = M.rows[api.nvim_win_get_cursor(M.win)[1]]
-  return id and store.get(M.src).comments[id] or nil
+  return type(id) == "string" and store.get(M.src).comments[id] or nil
+end
+
+local function line_under_cursor()
+  local t = M.rows[api.nvim_win_get_cursor(M.win)[1]]
+  return type(t) == "table" and t.line or nil
 end
 
 local function move_card(dir)
@@ -221,8 +350,28 @@ local function ensure_buf()
       if c then fn(M.src, c) end
     end
   end
-  map("<CR>", with(function(b, c) actions.jump(b, c, true) end))
-  map("o", with(function(b, c) actions.jump(b, c, true) end))
+  local function open_row()
+    local c = comment_under_cursor()
+    if c then
+      -- First <CR> on a one-line comment expands it here; a second jumps to it.
+      if store.get(M.src).active ~= c.id then
+        actions.activate(M.src, c)
+      else
+        actions.jump(M.src, c, true)
+      end
+      return
+    end
+    local line = line_under_cursor()
+    if line then actions.jump_line(M.src, line) end
+  end
+  map("<CR>", open_row)
+  map("o", open_row)
+  map("a", function()
+    local st = store.get(M.src)
+    st.show_all = not st.show_all
+    actions.refresh(M.src)
+  end)
+  map("v", function() actions.check(M.src) end)
   map("r", with(function(b, c) actions.toggle_resolve(b, c) end))
   map("R", with(function(b, c) actions.reply(b, c) end))
   map("dd", with(function(b, c) actions.delete(b, c) end))

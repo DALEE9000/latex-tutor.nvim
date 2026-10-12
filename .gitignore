@@ -2,3 +2,5 @@
 *.log
 progress*.jsonl
 progress*.md
+__pycache__/
+*.pyc

@@ -40,6 +40,25 @@ M.reply_schema = {
   required = { "reply", "resolved" },
 }
 
+M.check_schema = {
+  type = "object",
+  properties = {
+    results = {
+      type = "array",
+      items = {
+        type = "object",
+        properties = {
+          n = { type = "integer", description = "The comment number." },
+          status = { type = "string", enum = { "fixed", "partly", "not_fixed" } },
+          note = { type = "string", description = "One or two sentences for the student. Markdown." },
+        },
+        required = { "n", "status", "note" },
+      },
+    },
+  },
+  required = { "results" },
+}
+
 local function read(path)
   local f = io.open(path, "r")
   if not f then return nil end
@@ -113,6 +132,31 @@ function M.review(buf, unit, root)
     "",
     M.numbered(buf, unit.s, unit.e),
   }, "\n")
+end
+
+-- Ask whether the student's edits fix each open comment of a question.
+function M.check(buf, unit, comments)
+  local lines = {
+    string.format("Earlier you reviewed %s and left the comments below. The student has since edited the solution.", unit.label),
+    "For each comment, decide from the CURRENT text whether the issue is fixed.",
+    "",
+  }
+  for _, c in ipairs(comments) do
+    lines[#lines + 1] = string.format("#%d [%s] %s", c.n, config.sev(c.severity).label, c.title)
+    lines[#lines + 1] = "   Comment: " .. (c.body or ""):gsub("\n", " ")
+    if c.quote and c.quote ~= "" then lines[#lines + 1] = "   Originally quoted: " .. c.quote end
+    local last = c.thread and c.thread[#c.thread]
+    if last then lines[#lines + 1] = "   Last in thread (" .. last.role .. "): " .. last.text:gsub("\n", " ") end
+  end
+  vim.list_extend(lines, {
+    "",
+    string.format("Current text of lines %d–%d:", unit.s, unit.e),
+    M.numbered(buf, unit.s, unit.e),
+    "",
+    "Be strict: status=fixed only if the issue is genuinely resolved; partly if it improved but something is still missing; not_fixed otherwise.",
+    "Return one result per comment number. Keep each note short and follow the tutoring preferences (a nudge, not the answer, when it isn't fixed yet).",
+  })
+  return table.concat(lines, "\n")
 end
 
 function M.reply(buf, c, text, ctx_s, ctx_e)

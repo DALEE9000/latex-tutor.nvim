@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1a33"/>
+      <stop offset=".55" stop-color="#13306b"/>
+      <stop offset="1" stop-color="#1a73e8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1f3f4"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="9"/>
+      <feOffset dy="6" result="b"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".3"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+  <g opacity=".08" fill="#fff" font-family="Georgia, 'Times New Roman', serif" font-style="italic">
+    <text x="40" y="70" font-size="34">∫ f dμ</text>
+    <text x="560" y="300" font-size="30">∇·E = ρ/ε₀</text>
+    <text x="700" y="64" font-size="26">P(A∩B)</text>
+    <text x="40" y="290" font-size="28">Σ Xᵢ²</text>
+  </g>
+  <g transform="translate(72 92)">
+    <rect width="76" height="76" rx="18" fill="#fff" opacity=".12"/>
+    <path d="M16 18h32a10 10 0 0 1 10 10v18a10 10 0 0 1-10 10H30l-14 10V18z" fill="#fff"/>
+    <path d="M26 31h22M26 41h13" stroke="#1a73e8" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <text x="172" y="140" fill="#fff" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="56" font-weight="700" letter-spacing="-1">latex-tutor.nvim</text>
+  <text x="174" y="186" fill="#c6dafc" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="24">A demanding tutor for your LaTeX solutions,</text>
+  <text x="174" y="218" fill="#c6dafc" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="24">commenting in the margin like Google Docs.</text>
+  <g transform="translate(860 52)" filter="url(#sh)">
+    <rect width="360" height="92" rx="14" fill="url(#card)"/>
+    <rect x="0" y="16" width="4" height="60" rx="2" fill="#e37400"/>
+    <circle cx="34" cy="32" r="12" fill="#e37400"/>
+    <text x="34" y="37" text-anchor="middle" fill="#fff" font-family="Inter, 'Segoe UI', sans-serif" font-size="13" font-weight="700">5</text>
+    <text x="56" y="37" fill="#202124" font-family="Inter, 'Segoe UI', sans-serif" font-size="16" font-weight="600">Which WLLN? Xᵢ² may have</text>
+    <text x="56" y="58" fill="#202124" font-family="Inter, 'Segoe UI', sans-serif" font-size="16" font-weight="600">infinite variance</text>
+    <text x="22" y="80" fill="#e37400" font-family="Inter, 'Segoe UI', sans-serif" font-size="12.5" font-weight="600">Rigor <tspan fill="#5f6368" font-weight="400">· line 38 · high confidence</tspan></text>
+  </g>
+  <g transform="translate(900 166)" filter="url(#sh)">
+    <rect width="320" height="52" rx="14" fill="url(#card)"/>
+    <rect x="0" y="12" width="4" height="28" rx="2" fill="#188038"/>
+    <circle cx="30" cy="26" r="12" fill="#188038"/>
+    <text x="30" y="31" text-anchor="middle" fill="#fff" font-family="Inter, 'Segoe UI', sans-serif" font-size="13" font-weight="700">2</text>
+    <text x="52" y="31" fill="#5f6368" font-family="Inter, 'Segoe UI', sans-serif" font-size="15" font-weight="600">Index typo: Xₙ² → Xᵢ²</text>
+    <rect x="248" y="15" width="58" height="22" rx="11" fill="#e6f4ea"/>
+    <text x="277" y="30" text-anchor="middle" fill="#188038" font-family="Inter, 'Segoe UI', sans-serif" font-size="12" font-weight="600">Fixed</text>
+  </g>
+  <g transform="translate(900 236)" filter="url(#sh)">
+    <rect width="320" height="52" rx="14" fill="url(#card)"/>
+    <rect x="0" y="12" width="4" height="28" rx="2" fill="#9334e6"/>
+    <circle cx="30" cy="26" r="12" fill="#9334e6"/>
+    <text x="30" y="31" text-anchor="middle" fill="#fff" font-family="Inter, 'Segoe UI', sans-serif" font-size="13" font-weight="700">3</text>
+    <text x="52" y="31" fill="#202124" font-family="Inter, 'Segoe UI', sans-serif" font-size="15" font-weight="600">Nonstandard ⊔ notation</text>
+  </g>
+  <g transform="translate(174 248)" font-family="Inter, 'Segoe UI', sans-serif" font-size="15" font-weight="600">
+    <rect width="132" height="34" rx="17" fill="#fff" opacity=".14"/>
+    <text x="66" y="22" text-anchor="middle" fill="#fff">Neovim</text>
+    <rect x="144" width="160" height="34" rx="17" fill="#fff" opacity=".14"/>
+    <text x="224" y="22" text-anchor="middle" fill="#fff">Claude Code</text>
+    <rect x="316" width="140" height="34" rx="17" fill="#fff" opacity=".14"/>
+    <text x="386" y="22" text-anchor="middle" fill="#fff">TeXpresso</text>
+  </g>
+</svg>
