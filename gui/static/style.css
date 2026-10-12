@@ -255,6 +255,10 @@ body.zoomed .page { flex-shrink: 0; }
   position: absolute; left: 0; font-size: 12px; font-weight: 700; color: var(--text-2);
   letter-spacing: .04em; text-transform: uppercase; transition: top .28s;
 }
+/* section headings: written as they are in the document, just bold */
+.summary-card .label.sec, .group-label.sec {
+  text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 13.5px; color: var(--text);
+}
 
 .sheet-toggle { display: none; }
 
@@ -402,3 +406,4 @@ body.report-open .zoom { display: none; }
 }
 .model:empty { display: none; }
 @media (max-width: 560px) { .model { display: none; } }
+#picker option.sec { font-weight: 700; }

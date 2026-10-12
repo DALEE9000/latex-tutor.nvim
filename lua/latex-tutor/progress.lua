@@ -67,6 +67,12 @@ local function is_exercise(r)
   return r.kind == "exercise" or (type(r.unit) == "string" and r.unit:match("^Q ") ~= nil)
 end
 
+-- Section labels are raw LaTeX (\textsf{I.9 - ...}); show them as plain text.
+local function show(u)
+  if type(u) ~= "string" or not u:find("\\", 1, true) then return u or "" end
+  return require("latex-tutor.scope").plain(u)
+end
+
 local function pct(x) return x and string.format("%d%%", math.floor(x * 100 + 0.5)) or "–" end
 
 -- Latest verdict per exercise -> { n, score, by_verdict }
@@ -214,7 +220,7 @@ function M.report()
   for key, r in pairs(latest) do
     local f = first[key]
     if f ~= r and M.score[f.verdict] and M.score[r.verdict] and f.verdict ~= r.verdict then
-      changed[#changed + 1] = string.format("- %s · %s %s: %s → %s", r.manual, r.chapter, r.unit,
+      changed[#changed + 1] = string.format("- %s · %s %s: %s → %s", r.manual, r.chapter, show(r.unit),
         verdict_short[f.verdict], verdict_short[r.verdict])
     end
   end
@@ -232,7 +238,7 @@ function M.report()
     local r = resolves[i]
     if r.severity == "error" or r.severity == "rigor" then
       recent[#recent + 1] = string.format("- %s · %s %s · **%s**: %s", os.date("%b %d", r.at), r.manual,
-        r.unit or "", config.sev(r.severity).label, r.title or "")
+        show(r.unit), config.sev(r.severity).label, r.title or "")
       if #recent >= 15 then break end
     end
   end

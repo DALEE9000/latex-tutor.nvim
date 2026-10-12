@@ -342,11 +342,11 @@ function renderMargin() {
   const items = [];
   const groups = S.show_all ? (S.groups || []) : null;
 
-  const addSummary = (label, sum, anchorFrom) => {
+  const addSummary = (u, sum, anchorFrom) => {
     if (!sum) return;
     const el = document.createElement("div");
     el.className = "summary-card";
-    el.innerHTML = `<div class="label">${esc(label)} · ${esc(VERDICT[sum.verdict] || sum.verdict || "")}</div>
+    el.innerHTML = `<div class="label${u && u.section ? " sec" : ""}">${esc(titleOf(u))} · ${esc(VERDICT[sum.verdict] || sum.verdict || "")}</div>
       <div class="text body">${md(sum.summary)}</div><div class="when">Reviewed ${esc(sum.ago || "")}</div>`;
     margin.append(el);
     items.push({ el, anchor: anchorFrom });
@@ -370,23 +370,23 @@ function renderMargin() {
   if (groups) {
     for (const g of groups) {
       const lab = document.createElement("div");
-      lab.className = "group-label";
-      lab.textContent = g.label;
+      lab.className = "group-label" + (g.section ? " sec" : "");
+      lab.textContent = titleOf(g);
       margin.append(lab);
       const first = (S.comments || []).find((c) => c.group === g.label);
       items.push({ el: lab, anchor: first ? anchorY(first) : null });
-      addSummary(g.label, g.summary, first ? anchorY(first) : null);
+      addSummary(g, g.summary, first ? anchorY(first) : null);
       for (const c of S.comments || []) if (c.group === g.label) addCard(c);
     }
   } else {
     const fb = S.focus && S.focus.box;
     const fy = fb && pages[fb.page - 1] ? pages[fb.page - 1].el.offsetTop + fb.y * scale - margin.offsetTop : null;
-    addSummary(S.focus ? S.focus.label : "", S.summary, fy);
+    addSummary(S.focus, S.summary, fy);
     for (const c of visibleComments()) addCard(c);
     if (!S.summary && !(S.comments || []).length && S.focus) {
       const el = document.createElement("div");
       el.className = "summary-card";
-      el.innerHTML = `<div class="label">${esc(S.focus.label)}</div>
+      el.innerHTML = `<div class="label${S.focus.section ? " sec" : ""}">${esc(titleOf(S.focus))}</div>
         <div class="text">Not reviewed yet. Press <b>Review</b> (or <kbd>Space</kbd> <kbd>c</kbd> <kbd>c</kbd> in nvim).</div>`;
       margin.append(el);
       items.push({ el, anchor: fy });
@@ -500,6 +500,9 @@ function scrollToActive(force) {
   }
 }
 
+// What to show for a question/section: its clean heading if it has one.
+const titleOf = (u) => (u ? u.title || u.label || "" : "");
+
 function renderBar() {
   $("#file").textContent = S.name || "—";
   $("#file").title = S.file || "";
@@ -508,7 +511,7 @@ function renderBar() {
   const qs = S.questions || [];
   picker.innerHTML = qs.map((q) => {
     const mark = q.total ? ` · ${q.fixed}/${q.total}` : (q.verdict ? " · ✓" : "");
-    return `<option value="${q.line}" ${S.focus && q.label === S.focus.label ? "selected" : ""}>${esc(q.label)}${mark}</option>`;
+    return `<option value="${q.line}"${q.section ? ' class="sec"' : ""} ${S.focus && q.label === S.focus.label ? "selected" : ""}>${esc(titleOf(q))}${mark}</option>`;
   }).join("");
   picker.hidden = !qs.length;
   const v = $("#verdict");

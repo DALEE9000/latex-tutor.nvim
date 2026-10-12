@@ -80,17 +80,21 @@ function M.state(buf)
       local k = counts[u.label] or { fixed = 0, total = 0 }
       local sum = summary_for(st, u.label)
       questions[#questions + 1] = { label = u.label, line = u.s, fixed = k.fixed, total = k.total,
-        verdict = sum and sum.verdict or nil }
-      if k.total > 0 or sum then groups[#groups + 1] = { label = u.label, summary = sum } end
+        verdict = sum and sum.verdict or nil, title = u.title, section = u.section }
+      if k.total > 0 or sum then
+        groups[#groups + 1] = { label = u.label, summary = sum, title = u.title, section = u.section }
+      end
     end
   end
   local f = st.focus or {}
+  local ftitle, fsec
+  if f.label then ftitle, fsec = scope.title(buf, f.s, f.label) end
   return {
     type = "state",
     file = file,
     name = vim.fn.fnamemodify(file, ":t"),
     root = require("latex-tutor.prompt").project_root(file),
-    focus = f.label and { label = f.label, s = f.s, e = f.e } or nil,
+    focus = f.label and { label = f.label, s = f.s, e = f.e, title = ftitle, section = fsec or nil } or nil,
     model = require("latex-tutor.models").label(),
     -- the line you're on, so the window can keep it in view as you type
     cursor = api.nvim_get_current_buf() == buf and api.nvim_win_get_cursor(0)[1] or nil,
