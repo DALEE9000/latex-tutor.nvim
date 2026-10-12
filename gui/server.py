@@ -409,7 +409,10 @@ def read_nvim(engine):
             threading.Thread(target=compile_pdf, args=(msg["file"], msg.get("engine") or engine), daemon=True).start()
         elif kind == "quit":
             break
-    os._exit(0)  # nvim went away
+    # nvim quit (or went away): tell the window to close itself, then exit.
+    broadcast("bye", {})
+    time.sleep(0.3)
+    os._exit(0)
 
 
 def live_result(src, res):

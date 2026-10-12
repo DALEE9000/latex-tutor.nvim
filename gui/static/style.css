@@ -289,3 +289,6 @@ kbd {
   * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
 .overlay { position: absolute; inset: 0; }
+
+/* nvim quit and the browser kept the window open */
+body.closed #scroller, body.closed .actions { opacity: .45; pointer-events: none; }

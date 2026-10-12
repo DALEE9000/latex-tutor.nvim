@@ -554,7 +554,9 @@ function M.setup(opts)
     end,
   })
 
-  api.nvim_create_user_command("Tutor", function(o)
+  local subcommands = { "exercise", "file", "panel", "gui", "check", "hide", "show", "progress",
+    "next", "prev", "cancel", "pdf", "prefs", "clear" }
+  local function run(o)
     local buf = api.nvim_get_current_buf()
     local what = o.args
     if o.range > 0 and what == "" then
@@ -579,13 +581,34 @@ function M.setup(opts)
       store.get(buf).summaries = {}
       M.refresh(buf)
     else
-      notify("Unknown :Tutor argument " .. what, vim.log.levels.ERROR)
+      notify("Unknown :LatexTutor argument " .. what, vim.log.levels.ERROR)
     end
-  end, {
-    nargs = "?", range = true,
-    complete = function() return { "exercise", "file", "panel", "gui", "check", "hide", "show", "progress", "next", "prev", "cancel", "pdf", "prefs", "clear" } end,
-    desc = "latex-tutor",
+  end
+  local function complete(lead)
+    return vim.tbl_filter(function(x) return x:find(lead, 1, true) == 1 end, subcommands)
+  end
+  api.nvim_create_user_command("LatexTutor", run, {
+    nargs = "?", range = true, complete = complete, desc = "latex-tutor",
   })
+  -- :Tutor is also Neovim's built-in vimtutor command, which loads after your
+  -- config and replaces ours. Claim it once startup is done; anything that
+  -- isn't one of our subcommands (":Tutor vim-01-beginner") still opens the
+  -- built-in lessons.
+  local function claim_tutor()
+    api.nvim_create_user_command("Tutor", function(o)
+      if o.args == "" or vim.tbl_contains(subcommands, o.args) then return run(o) end
+      vim.fn["tutor#TutorCmd"](o.args)
+    end, {
+      nargs = "?", range = true, desc = "latex-tutor (other names: Neovim's tutor)",
+      complete = function(lead)
+        local ours = complete(lead)
+        local ok, lessons = pcall(vim.fn.getcompletion, lead, "custom,tutor#TutorCmdComplete")
+        return vim.list_extend(ours, ok and lessons or {})
+      end,
+    })
+  end
+  if vim.v.vim_did_enter == 1 then claim_tutor()
+  else api.nvim_create_autocmd("VimEnter", { group = group, once = true, callback = claim_tutor }) end
 
   for _, b in ipairs(api.nvim_list_bufs()) do
     if api.nvim_buf_is_loaded(b) then M.attach(b) end

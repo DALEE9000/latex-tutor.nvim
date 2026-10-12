@@ -535,6 +535,16 @@ function connect() {
   es.addEventListener("state", (e) => apply(JSON.parse(e.data)));
   es.addEventListener("build", () => { if (S.pdf) { S.pdf.building = true; renderStatus(); } });
   es.onerror = () => showStatus("Disconnected — is nvim still running?", "error");
+  // nvim quit: close this window. A browser may refuse for a tab it didn't
+  // open by script, so say what happened instead.
+  es.addEventListener("bye", () => {
+    es.close();
+    window.close();
+    setTimeout(() => {
+      showStatus("nvim closed — you can close this window", "error");
+      document.body.classList.add("closed");
+    }, 300);
+  });
   es.onopen = () => renderStatus();
 }
 

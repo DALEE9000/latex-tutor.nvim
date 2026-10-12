@@ -329,7 +329,12 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
   its own and moves the cursor one character.
 * **Don't type `_` for Space.** `_ce` deletes the first word of the line. If
   that happens, press <kbd>Esc</kbd> then <kbd>u</kbd> to undo.
-* Every key also has a **typed form**: type `:Tutor`, then Enter.
+* Every key also has a **typed form**: type `:Tutor`, then Enter. `:LatexTutor`
+  is the same command under a name nothing else uses. (`:Tutor` is also
+  Neovim's built-in vimtutor; the plugin takes it over after startup and
+  hands names like `:Tutor vim-01-beginner` back to the built-in lessons.)
+* **Quitting nvim (`:q`, `:wq`) closes the Tutor window too.** If the browser
+  won't let the page close itself, it greys out and says nvim has closed.
 * `<C-s>` means hold <kbd>Ctrl</kbd> and press <kbd>s</kbd>.
 
 ### In a `.tex` file
@@ -351,7 +356,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | | `␣ca` | `:Tutor pdf` | TeXpresso badges on / off |
 | 📈 | `␣cs` | `:Tutor progress` | Progress report |
 | ⚙️ | `␣ce` | `:Tutor prefs` | Edit the `TUTOR.md` in effect |
-| | | `:Tutor clear` | Delete every comment in this file |
+| 🧹 | | `:Tutor clear` | **Delete every comment** (and summary) in this file. Your progress log keeps its history |
 
 ### In the Tutor window
 

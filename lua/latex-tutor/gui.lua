@@ -257,6 +257,8 @@ end
 function M.stop()
   if M.job then
     send({ type = "quit" })
+    -- Give the server a moment to tell the window to close (:q, :wq).
+    pcall(function() M.job:wait(800) end)
     pcall(function() M.job:kill(15) end)
   end
   M.job, M.port = nil, nil
