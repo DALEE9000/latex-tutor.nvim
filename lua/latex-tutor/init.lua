@@ -110,6 +110,11 @@ function M.review(buf, unit)
   local tick = api.nvim_buf_get_changedtick(buf)
   ui.mark_pending(buf, unit.s, unit.e)
   ui.task_start(key, "Tutor · " .. unit.label)
+  -- Open the window right away so it builds the PDF while the tutor thinks.
+  local g = cfg.gui
+  if g.open_on_review and not gui.running() and not store.hidden and vim.fn.executable(g.python) == 1 then
+    gui.open(buf)
+  end
 
   claude.run({
     key = key,
@@ -180,7 +185,7 @@ function M.review(buf, unit)
     panel.src = buf
     M.focus(buf, s0 + 1, true)
     st.active = fresh[1] and fresh[1].id or nil
-    if cfg.panel.auto_open and not panel.is_open() and not store.hidden and not gui.running() then panel.open(buf) end
+    if cfg.panel.auto_open and not panel.is_open() and not store.hidden and not gui.running() and not gui.job then panel.open(buf) end
     M.refresh(buf)
 
     local parts = {}

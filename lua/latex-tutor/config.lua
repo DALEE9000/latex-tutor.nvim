@@ -62,6 +62,7 @@ M.defaults = {
     port = 0,              -- 0 = any free port
     engine = "pdflatex",   -- builds into ~/.cache/latex-tutor/build/, never next to your files
     window_size = "1440,920",
+    open_on_review = true, -- Space c c also opens the window (false = terminal sidebar only)
     open_cmd = nil,        -- override: a command list (URL appended) or function(url)
   },
   card = { auto = true, max_width = 84 }, -- auto: pop up when cursor lands on a comment (panel closed)

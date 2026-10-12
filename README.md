@@ -279,7 +279,7 @@ or after editing a local clone, `:Lazy reload latex-tutor.nvim` (or restart nvim
 
 | | Key | Command | What it does |
 |:-:|---|---|---|
-| 🔍 | `␣cc` | `:Tutor` | **Review** the exercise under the cursor (visual mode: the selection) |
+| 🔍 | `␣cc` | `:Tutor` | **Review** the exercise under the cursor (visual mode: the selection) and opens the Tutor window |
 | | `␣cf` | `:Tutor file` | Review the whole file |
 | | `␣cx` | `:Tutor cancel` | Cancel a running review |
 | 🪟 | `␣cg` | `:Tutor gui` | Open the **Tutor window** |
@@ -426,6 +426,7 @@ require("latex-tutor").setup({
     port = 0,                   -- 0 = any free port
     engine = "pdflatex",        -- or "xelatex" / "lualatex"
     window_size = "1440,920",
+    open_on_review = true,      -- reviewing (Space c c) also opens the window
     open_cmd = nil,             -- { "firefox" } or function(url) … end to override
   },
   panel = { width = 54, auto_open = true },   -- terminal sidebar
