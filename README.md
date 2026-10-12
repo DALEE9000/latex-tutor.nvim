@@ -700,3 +700,7 @@ examples/TUTOR.md
 <sub>Built for a self-study workflow of writing complete solutions manuals in LaTeX.<br>
 AI review is inconsistent in both directions, so each comment shows how confident the tutor is.</sub>
 </div>
+
+## 📄 License
+
+MIT, see [LICENSE](LICENSE). The bundled libraries in `gui/static/vendor/` keep their own licenses (listed in [its README](gui/static/vendor/README.md)).
