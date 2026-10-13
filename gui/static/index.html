@@ -35,6 +35,7 @@
     <button class="zbtn" id="zoom-in" title="Zoom in (Ctrl +)" aria-label="Zoom in">+</button>
   </div>
   <div class="actions">
+    <button class="btn ghost" id="btn-chat" title="Chat with the tutor about this exercise (C)" aria-label="Chat" aria-pressed="false">💬<span class="lbl"> Chat</span></button>
     <button class="btn ghost" id="btn-draw" title="Draw a diagram in TikZ, from words or a photo of your sketch (T)" aria-label="Draw">✎<span class="lbl"> Draw</span></button>
     <button class="btn ghost" id="btn-progress" title="Your progress report (P)">Progress</button>
     <button class="btn ghost" id="btn-all" title="Show every reviewed question (A)">All questions</button>
@@ -54,6 +55,19 @@
 </main>
 
 <button class="sheet-toggle" id="sheet-toggle" hidden>Comments</button>
+
+<aside class="chat" id="chatview" hidden aria-label="Chat with the tutor">
+  <div class="c-head">
+    <div class="c-titles"><div class="c-kicker">💬 Chat</div><div class="c-title" id="chat-title"></div></div>
+    <button class="btn small ghost" id="chat-new" title="Start this exercise's chat over">New chat</button>
+    <button class="btn report-close c-close" id="chat-close" title="Close (Esc)" aria-label="Close">✕</button>
+  </div>
+  <div class="c-log" id="chat-log" aria-live="polite"></div>
+  <form class="c-compose" id="chat-form">
+    <textarea id="chat-text" rows="1" placeholder="Ask about this exercise…" aria-label="Message"></textarea>
+    <button class="btn primary" id="chat-send" type="submit">Send</button>
+  </form>
+</aside>
 
 <section class="report" id="mathview" hidden aria-label="Σ answer">
   <div class="report-card">

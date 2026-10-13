@@ -73,7 +73,8 @@ closes what you actually fixed. A bar shows **3/5 fixed**.
 
 ### 💬 Argue back
 Reply on any comment: "I think pairwise independence is enough here". The
-tutor answers, and closes the comment if you convinced it.
+tutor answers, and closes the comment if you convinced it. Or open
+**💬 Chat** and talk the whole exercise through.
 
 </td>
 </tr>
@@ -351,6 +352,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | ✅ | `␣cv` | `:Tutor check` | **Check my fixes**: the tutor re-reads your edits |
 | 🤖 | `␣cM` | `:Tutor model` | **Choose the AI**: Claude Opus / Sonnet / Haiku / any model id, or Codex. `:Tutor model math` picks the Σ model |
 | Σ | `␣cm` | `:Tutor math` | **Evaluate / derive** the selection (visual) or current line; asks what you want, answers with steps, a check and LaTeX to insert |
+| 💬 | `␣ci` | `:Tutor chat [message]` | **Chat with the tutor** about the exercise under the cursor (in the window when it's open, else an nvim split) |
 | ✎ | `␣ct` | `:Tutor draw [photo]` | **Draw a diagram in TikZ** from a description, or from a photo / scan of your hand-drawn sketch; compiled with your header, ready to insert |
 | | `␣cr` | | Resolve / reopen a comment |
 | | `␣cR` | | Reply to a comment (<kbd>Ctrl</kbd>+<kbd>s</kbd> sends) |
@@ -374,6 +376,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | <kbd>A</kbd> | All reviewed questions ↔ just this one |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send a reply |
 | Question menu (top left) | Jump to another exercise |
+| <kbd>C</kbd> or **💬 Chat** | Chat about this exercise in a panel beside the PDF. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> is a new line |
 | <kbd>T</kbd> or **✎ Draw** | Draw a diagram in TikZ: type a description, or add a sketch with the camera, a file, paste or drag-and-drop |
 | <kbd>P</kbd> or **Progress** | Your progress report, over the PDF (<kbd>Esc</kbd> closes it) |
 | <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>, or the **− 100% +** control | Zoom the PDF in / out / back to fit width |
@@ -411,6 +414,29 @@ line N** and **Copy LaTeX** buttons. Otherwise it appears in a float in nvim:
 
 It uses Sonnet by default, which takes about 5–10 s. For harder derivations,
 set `math = { model = "opus" }`. Like reviews, it runs on your subscription.
+
+<br>
+
+## 💬 Chat about the exercise
+
+Press `␣ci` (or **💬 Chat** / <kbd>C</kbd> in the window) and ask anything:
+*"is line 12 right?"*, *"why would Fubini apply here?"*, *"give me a hint
+for the next step"*, *"what limiting case should I check?"*.
+
+* **It sees the exercise as it reads now**, unsaved edits included, with
+  line numbers, plus its open review comments and where your cursor is.
+  After the first message it only re-sends the text when you've changed it.
+* **One conversation per exercise.** Move to another question and the panel
+  switches to that one's chat; come back and it's still there (saved across
+  restarts). **New chat** starts an exercise over.
+* **Your `TUTOR.md` applies**, so "hints, not answers" holds here too.
+* **Stop** cancels an answer and puts your message back in the box.
+* Without the window it opens as an nvim split: `i` asks, `n` new chat,
+  `x` stops, `q` closes. `:Tutor chat is my answer right?` asks directly.
+
+With Claude a chat is one resumed session, so the tutor remembers the whole
+conversation; on Codex the recent messages are sent along. An answer takes
+about 15–25 s with Opus; `chat = { model = "sonnet" }` is quicker.
 
 <br>
 
@@ -600,13 +626,14 @@ require("latex-tutor").setup({
     review = "c", review_file = "f", panel = "o", next = "n", prev = "p",
     card = "k", resolve = "r", reply = "R", delete = "d", pdf = "a",
     cancel = "x", prefs = "e", hide = "q", progress = "s", check = "v", gui = "g",
-    math = "m", model = "M", draw = "t",
+    math = "m", model = "M", draw = "t", chat = "i",
   },
 
   backend = "claude",           -- or "codex"; ␣cM switches at runtime
   codex = { cmd = "codex", model = nil, math_model = nil, effort = nil },
   math = { model = "sonnet", effort = nil },   -- Σ evaluate / derive; "opus" for harder ones
   draw = { model = nil, self_check = true, max_fixes = 2 }, -- ✎ TikZ; nil = the review model
+  chat = { model = nil, effort = nil },  -- 💬 chat; nil = the review model, "sonnet" is faster
 
   gui = {
     python = "python3",
@@ -640,6 +667,7 @@ Nothing is written next to your `.tex` files.
 | Progress log + report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |
 | Compiled PDFs for the window (on-save and live) | `~/.cache/latex-tutor/build/` | No |
 | Sketches you add and TikZ previews (✎ Draw) | `~/.cache/latex-tutor/draw/` | No |
+| Chats, per file (💬) | `~/.local/share/nvim/latex-tutor/chats/` | No |
 | Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
 | Reply threads | Claude Code's own session history (`~/.claude/`) | No |
 
@@ -729,6 +757,7 @@ lua/latex-tutor/
   pdf.lua       TeXpresso annotation bridge
   progress.lua  private progress log and report
   math.lua      Σ evaluate / derive the selection
+  chat.lua      💬 chat about the exercise: per-exercise threads, resumed sessions
   draw.lua      ✎ TikZ from a description or a sketch: compile, fix, self-check, refine
   models.lua    choosing the AI / model (saved choice)
   codex.lua     OpenAI Codex CLI backend

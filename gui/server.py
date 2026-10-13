@@ -15,6 +15,7 @@ The browser window talks to the server over HTTP on 127.0.0.1:
   POST /action      a click, forwarded to nvim
   POST /upload      a sketch photo / scan for Draw (saved in ~/.cache/latex-tutor/draw/)
   GET  /draw-file   a sketch or TikZ preview from that folder
+  GET  /chat        the chat panel's conversation (snapshot mode)
 
 The PDF is built with pdflatex -synctex=1 into ~/.cache/latex-tutor/build/,
 never next to your .tex files or in build/. SyncTeX maps each comment's
@@ -370,6 +371,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(last.get("math") or {}).encode(), "application/json")
         if path == "/draw":  # the last Draw panel state (snapshot mode)
             return self.send(200, json.dumps(last.get("draw") or {}).encode(), "application/json")
+        if path == "/chat":  # the chat panel (snapshot mode)
+            return self.send(200, json.dumps(last.get("chat") or {}).encode(), "application/json")
         if path == "/draw-file":  # a sketch you added, or a TikZ preview
             m = re.search(r"[?&]n=([\w\-]+\.\w+)", self.path)
             f = DRAW / m.group(1) if m else None
@@ -448,6 +451,10 @@ def read_nvim(engine):
             msg["macros"] = macros_for(state.get("root"))
             last["draw"] = msg
             broadcast("draw", msg)
+        elif kind == "chat":
+            msg["macros"] = macros_for(state.get("root"))
+            last["chat"] = msg
+            broadcast("chat", msg)
         elif kind == "progress":
             last["progress"] = msg.get("md") or ""
             broadcast("progress", {"md": last["progress"]})

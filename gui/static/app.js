@@ -10,6 +10,8 @@ const scroller = $("#scroller");
 const pagesEl = $("#pages");
 const margin = $("#margin");
 const narrowMq = matchMedia("(max-width: 980px)");
+// Mid-width windows with the chat open: the comment margin steps aside (CSS).
+const chatTightMq = matchMedia("(min-width: 981px) and (max-width: 1399px)");
 
 let S = {};                 // latest state from nvim
 let doc = null;             // pdf.js document
@@ -70,6 +72,7 @@ const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 function availableWidth() {
   const sheetW = scroller.clientWidth;
   if (narrowMq.matches) return sheetW - 32;
+  if (chatTightMq.matches && document.body.classList.contains("chat-open")) return Math.min(920, sheetW - 64);
   const marginW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--margin-w")) || 340;
   return Math.min(920, sheetW - marginW - 28 - 48 - 16);
 }
@@ -605,6 +608,7 @@ function connect() {
   es.addEventListener("progress", (e) => openReport(JSON.parse(e.data).md));
   es.addEventListener("math", (e) => openMath(JSON.parse(e.data)));
   es.addEventListener("draw", (e) => drawEvent(JSON.parse(e.data)));
+  es.addEventListener("chat", (e) => chatEvent(JSON.parse(e.data)));
   es.addEventListener("build", () => { if (S.pdf) { S.pdf.building = true; renderStatus(); } });
   es.onerror = () => showStatus("Disconnected — is nvim still running?", "error");
   // nvim quit: close this window. A browser may refuse for a tab it didn't
@@ -625,6 +629,8 @@ $("#btn-check").addEventListener("click", () => post("check"));
 $("#btn-all").addEventListener("click", () => post("show_all"));
 $("#btn-progress").addEventListener("click", () => post("progress"));
 $("#btn-draw").addEventListener("click", () => openDraw());
+$("#btn-chat").addEventListener("click", () => ($("#chatview").hidden ? openChat() : closeChat()));
+$("#chat-close").addEventListener("click", () => closeChat());
 $("#draw-close").addEventListener("click", () => closeDraw());
 $("#drawview").addEventListener("click", (e) => { if (e.target.id === "drawview") closeDraw(); });
 $("#zoom-in").addEventListener("click", () => stepZoom(1));
@@ -904,6 +910,98 @@ $("#drawview").addEventListener("drop", (e) => {
   if (f) addImage(f);
 });
 
+/* ---- 💬 Chat about the exercise ------------------------------------------ */
+// nvim keeps the conversations (chat.lua), one per exercise, and sends the
+// one for the question you're on; this panel shows it and sends messages.
+
+let CS = {};                        // the conversation shown
+const chatDrafts = new Map();       // exercise key -> unsent text
+const SUGGEST = ["Is my answer right?", "Give me a hint for the next step", "Explain the key idea", "How can I check this?"];
+
+function chatEvent(c) {
+  const ta = $("#chat-text");
+  if (CS.key && CS.key !== c.key) chatDrafts.set(CS.key, ta.value);   // moved to another question
+  const switched = CS.key !== c.key;
+  CS = c || {};
+  if (switched) ta.value = chatDrafts.get(CS.key) || "";
+  if (c.restore && !ta.value) ta.value = c.restore;   // stopped: your message, to edit and resend
+  if (c.open) openChat(true);
+  else if (!$("#chatview").hidden) renderChat(switched);
+}
+
+function openChat(fromNvim) {
+  $("#chatview").hidden = false;
+  document.body.classList.add("chat-open");
+  $("#btn-chat").setAttribute("aria-pressed", "true");
+  if (!fromNvim) post("chat_open", CS.key ? { key: CS.key } : {});
+  renderChat(true);
+  refit();
+  setTimeout(() => $("#chat-text").focus(), 0);
+}
+
+function closeChat() {
+  $("#chatview").hidden = true;
+  document.body.classList.remove("chat-open");
+  $("#btn-chat").setAttribute("aria-pressed", "false");
+  post("chat_close");
+  refit();
+}
+
+function renderChat(jump) {
+  const log = $("#chat-log");
+  const nearEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  $("#chat-title").textContent = titleOf(CS) || "this exercise";
+  const msgs = CS.msgs || [];
+  let h = "";
+  if (!msgs.length && CS.status !== "working") {
+    h += `<div class="c-empty"><p>Ask anything about <b>${esc(titleOf(CS) || "this exercise")}</b>. The tutor sees it as it reads now, unsaved edits too, and follows your tutoring preferences.</p>
+      <div class="c-suggest">${SUGGEST.map((s) => `<button class="btn small" type="button" data-say="${esc(s)}">${esc(s)}</button>`).join("")}</div></div>`;
+  }
+  for (const m of msgs) {
+    h += m.role === "you"
+      ? `<div class="c-msg you"><div class="c-bubble">${esc(m.text).replace(/\n/g, "<br>")}</div></div>`
+      : `<div class="c-msg tutor"><div class="c-who">Tutor</div><div class="c-text body">${md(m.text)}</div></div>`;
+  }
+  if (CS.status === "working") h += `<div class="c-msg tutor"><div class="thinking"><span class="spin"></span>Tutor is thinking…<button class="btn small" type="button" id="chat-stop">Stop</button></div></div>`;
+  if (CS.error) h += `<div class="c-error">${esc(CS.error)}</div>`;
+  log.innerHTML = h;
+  log.querySelectorAll("[data-say]").forEach((b) => b.addEventListener("click", () => sendChat(b.dataset.say)));
+  if ($("#chat-stop")) $("#chat-stop").addEventListener("click", () => post("chat_cancel", { key: CS.key }));
+  $("#chat-new").disabled = !msgs.length && CS.status !== "working";
+  $("#chat-send").disabled = CS.status === "working";
+  if (jump || nearEnd) log.scrollTop = log.scrollHeight;
+  growChat();
+}
+
+// The page area changed width: refit the pages to it.
+function refit() { requestAnimationFrame(() => { sizePages(); render(); }); }
+
+function sendChat(text) {
+  text = (text || "").trim();
+  if (!text || CS.status === "working") return;
+  // show it right away; nvim's answer replaces this
+  CS = { ...CS, msgs: [...(CS.msgs || []), { role: "you", text }], status: "working", error: null };
+  chatDrafts.delete(CS.key);
+  $("#chat-text").value = "";
+  post("chat_send", { key: CS.key, text });
+  renderChat(true);
+}
+
+function growChat() {
+  const ta = $("#chat-text");
+  ta.style.height = "auto";
+  ta.style.height = `${Math.min(180, ta.scrollHeight + 2)}px`;
+}
+
+$("#chat-form").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#chat-text").value); });
+$("#chat-text").addEventListener("input", growChat);
+$("#chat-text").addEventListener("keydown", (e) => {
+  // Enter sends, Shift+Enter is a new line
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendChat(e.target.value); }
+  if (e.key === "Escape") e.target.blur();
+});
+$("#chat-new").addEventListener("click", () => { if (CS.key) post("chat_new", { key: CS.key }); });
+
 function closeReport() {
   $("#report").hidden = true;
   document.body.classList.remove("report-open");
@@ -913,6 +1011,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#drawview").hidden) { closeDraw(); e.preventDefault(); return; }
   if (e.key === "Escape" && !$("#mathview").hidden) { closeMath(); e.preventDefault(); return; }
   if (e.key === "Escape" && !$("#report").hidden) { closeReport(); e.preventDefault(); return; }
+  if (e.key === "Escape" && !$("#chatview").hidden && !e.target.closest("textarea, input, select")) { closeChat(); e.preventDefault(); return; }
   if (e.ctrlKey || e.metaKey) {
     if (e.key === "=" || e.key === "+") { stepZoom(1); e.preventDefault(); }
     else if (e.key === "-" || e.key === "_") { stepZoom(-1); e.preventDefault(); }
@@ -923,6 +1022,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "p" || e.key === "P") { post("progress"); e.preventDefault(); return; }
   if (!$("#report").hidden || !$("#mathview").hidden || !$("#drawview").hidden) return;
   if (e.key === "t" || e.key === "T") { openDraw(); e.preventDefault(); return; }
+  if (e.key === "c" || e.key === "C") { $("#chatview").hidden ? openChat() : $("#chat-text").focus(); e.preventDefault(); return; }
   const list = S.comments || [];
   const i = list.findIndex((c) => c.id === S.active);
   if (e.key === "j" || e.key === "J") { const c = list[Math.min(list.length - 1, i + 1)]; if (c) activate(c.id, true); }
@@ -972,6 +1072,9 @@ if (new URLSearchParams(location.search).has("snapshot")) {
   }
   if (new URLSearchParams(location.search).has("draw")) {
     fetch("/draw").then((r) => r.json()).then((d) => d.status && drawEvent({ ...d, open: true }));
+  }
+  if (new URLSearchParams(location.search).has("chat")) {
+    fetch("/chat").then((r) => r.json()).then((c) => c.key && chatEvent({ ...c, open: true }));
   }
   if (new URLSearchParams(location.search).has("report")) {
     fetch("/progress").then((r) => r.json()).then((d) => d.md && openReport(d.md));

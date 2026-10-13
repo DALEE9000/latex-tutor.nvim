@@ -472,6 +472,7 @@ local function keymaps(buf)
   map("n", k.model, function() require("latex-tutor.models").pick("review") end, "choose the AI / model")
   map("x", k.math, function() require("latex-tutor.math").ask(buf, true) end, "evaluate / derive the selection")
   map("n", k.draw, function() require("latex-tutor.draw").open(buf) end, "draw a diagram (TikZ)")
+  if k.chat then map("n", k.chat, function() require("latex-tutor.chat").open(buf) end, "chat about this exercise") end
   map("n", k.prefs, function() vim.cmd.edit(vim.fn.fnameescape((prompt.find_prefs(api.nvim_buf_get_name(buf))))) end,
     "edit tutoring preferences")
 end
@@ -565,7 +566,7 @@ function M.setup(opts)
   })
 
   local subcommands = { "exercise", "file", "panel", "gui", "check", "hide", "show", "progress",
-    "next", "prev", "cancel", "pdf", "prefs", "clear", "math", "model", "model math", "draw" }
+    "next", "prev", "cancel", "pdf", "prefs", "clear", "math", "model", "model math", "draw", "chat" }
   local function run(o)
     local buf = api.nvim_get_current_buf()
     local what = o.args
@@ -598,6 +599,8 @@ function M.setup(opts)
       end
     elseif what == "draw" or what:match("^draw%s") then
       require("latex-tutor.draw").open(buf, what:match("^draw%s+(.+)$"))
+    elseif what == "chat" or what:match("^chat%s") then
+      require("latex-tutor.chat").open(buf, what:match("^chat%s+(.+)$"))
     elseif what == "clear" then
       for _, c in ipairs(store.list(buf)) do store.remove(buf, c.id) end
       store.get(buf).summaries = {}
@@ -618,7 +621,7 @@ function M.setup(opts)
   -- built-in lessons.
   local function claim_tutor()
     api.nvim_create_user_command("Tutor", function(o)
-      if o.args == "" or vim.tbl_contains(subcommands, o.args) or o.args:match("^draw%s") then return run(o) end
+      if o.args == "" or vim.tbl_contains(subcommands, o.args) or o.args:match("^draw%s") or o.args:match("^chat%s") then return run(o) end
       vim.fn["tutor#TutorCmd"](o.args)
     end, {
       nargs = "?", range = true, desc = "latex-tutor (other names: Neovim's tutor)",

@@ -57,6 +57,7 @@ M.defaults = {
     math = "m",            -- evaluate / derive the selection (or current line)
     model = "M",           -- choose the AI / model (also :Tutor model)
     draw = "t",            -- draw a diagram in TikZ, from words or a photo of a sketch
+    chat = "i",            -- chat with the tutor about the exercise you're on
   },
 
   panel = { width = 54, auto_open = true }, -- auto_open is skipped while the GUI window is open
@@ -70,6 +71,8 @@ M.defaults = {
   -- ✎ Draw (Space c t): TikZ from a description or a photo / scan of a sketch.
   -- model nil = the review model (sketches need its vision and care).
   draw = { model = nil, self_check = true, max_fixes = 2 },
+  -- 💬 Chat (Space c i). model nil = the review model; "sonnet" answers faster.
+  chat = { model = nil, effort = nil },
   gui = {
     python = "python3",
     port = 0,              -- 0 = any free port

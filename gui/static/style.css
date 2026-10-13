@@ -443,3 +443,55 @@ body.report-open .zoom { display: none; }
 @media (max-width: 560px) { #btn-draw { padding: 6px 10px; } #btn-draw .lbl { display: none; } }
 #drawview .m-actions { align-items: center; }
 .m-latex, .report-body code, #draw-text, #draw-refine { font-variant-ligatures: none; }
+
+/* ---- 💬 Chat: a panel on the right; the PDF and comments make room ---- */
+:root { --chat-w: min(440px, 38vw); }
+.chat {
+  position: fixed; top: var(--bar-h); right: 0; bottom: 0; width: var(--chat-w); z-index: 25;
+  display: flex; flex-direction: column; background: var(--surface);
+  border-left: 1px solid var(--line); box-shadow: var(--shadow-2);
+}
+body.chat-open #scroller { right: var(--chat-w); }
+.c-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+.c-titles { flex: 1; min-width: 0; }
+.c-kicker { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.c-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat .c-close { position: static; flex: none; }
+.c-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.c-empty { color: var(--text-2); }
+.c-empty p { margin: 0 0 12px; }
+.c-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.c-msg.you { align-self: flex-end; max-width: 88%; }
+.c-bubble {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-radius: 14px 14px 4px 14px;
+  padding: 8px 12px; overflow-wrap: anywhere;
+}
+.c-msg.tutor { max-width: 100%; min-width: 0; }
+.c-who { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
+.c-text { overflow-wrap: anywhere; }
+.c-text > :first-child { margin-top: 0; }
+.c-text > :last-child { margin-bottom: 0; }
+.c-text .katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.c-text pre { overflow-x: auto; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.c-text code, .c-text pre { font: 12.5px/1.5 "JetBrains Mono", ui-monospace, monospace; font-variant-ligatures: none; }
+.c-msg .thinking .btn { margin-left: 6px; }
+.c-error { color: var(--error); font-size: 13px; }
+.c-compose { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+#chat-text {
+  flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  padding: 9px 12px; max-height: 180px; line-height: 1.45;
+}
+#chat-text:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+/* Narrow windows: the chat covers the page (and the bottom toolbar). */
+@media (max-width: 980px) {
+  :root { --chat-w: 100vw; }
+  body.chat-open #scroller { right: 0; }
+  .chat { border-left: 0; }
+  #chatview .c-compose { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 560px) { #btn-chat { padding: 6px 10px; } #btn-chat .lbl { display: none; } }
+@media (min-width: 981px) and (max-width: 1399px) { body.chat-open #margin { display: none; } }
+/* Phones: the action buttons wrap onto a second row instead of running off the edge. */
+@media (max-width: 560px) {
+  .actions { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; row-gap: 8px; }
+}

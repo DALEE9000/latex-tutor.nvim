@@ -119,6 +119,7 @@ function M.push_soon(buf)
     if M.running() and api.nvim_buf_is_valid(buf) then
       send(M.state(buf))
       M.live_soon(buf)  -- no-op unless the question or text changed
+      require("latex-tutor.chat").follow(buf)  -- an open chat follows the question
     end
   end, 60)
 end
@@ -179,6 +180,13 @@ function M.draw(msg)
   return true
 end
 
+-- Chat (chat.lua): the conversation panel beside the PDF.
+function M.chat(msg)
+  if not M.running() then return false end
+  send(vim.tbl_extend("force", { type = "chat" }, msg))
+  return true
+end
+
 -- Follow the .tex buffer you switch to.
 function M.follow(buf)
   if not M.running() or buf == M.buf then return end
@@ -227,6 +235,7 @@ local function act(msg)
   elseif a == "jump_line" and tonumber(msg.line) then T.jump_line(buf, tonumber(msg.line))
   elseif a == "progress" then M.show_progress()
   elseif a == "math_insert" then require("latex-tutor.math").insert()
+  elseif type(a) == "string" and a:match("^chat_") then require("latex-tutor.chat").action(buf, msg)
   elseif type(a) == "string" and a:match("^draw") then require("latex-tutor.draw").action(buf, msg)
   end
 end
