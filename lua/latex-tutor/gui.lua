@@ -172,6 +172,13 @@ function M.show_math(r)
   return true
 end
 
+-- Draw (draw.lua): the TikZ panel over the PDF.
+function M.draw(msg)
+  if not M.running() then return false end
+  send(vim.tbl_extend("force", { type = "draw" }, msg))
+  return true
+end
+
 -- Follow the .tex buffer you switch to.
 function M.follow(buf)
   if not M.running() or buf == M.buf then return end
@@ -220,6 +227,7 @@ local function act(msg)
   elseif a == "jump_line" and tonumber(msg.line) then T.jump_line(buf, tonumber(msg.line))
   elseif a == "progress" then M.show_progress()
   elseif a == "math_insert" then require("latex-tutor.math").insert()
+  elseif type(a) == "string" and a:match("^draw") then require("latex-tutor.draw").action(buf, msg)
   end
 end
 

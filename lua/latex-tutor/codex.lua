@@ -64,6 +64,12 @@ function M.run(opts, on_done, jobs)
     "--output-schema", schema_file,
     "--output-last-message", out_file,
   }
+  -- --image takes several values, so it goes right after "exec", where the
+  -- next word is always another flag (never the final "-")
+  for i, img in ipairs(opts.images or {}) do
+    table.insert(cmd, 5 + 2 * i - 1, "--image")
+    table.insert(cmd, 5 + 2 * i, img)
+  end
   if opts.cwd then vim.list_extend(cmd, { "--cd", opts.cwd }) end
   local model = opts.model or cx.model
   if model then vim.list_extend(cmd, { "--model", model }) end

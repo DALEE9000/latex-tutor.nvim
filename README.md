@@ -351,6 +351,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | ✅ | `␣cv` | `:Tutor check` | **Check my fixes**: the tutor re-reads your edits |
 | 🤖 | `␣cM` | `:Tutor model` | **Choose the AI**: Claude Opus / Sonnet / Haiku / any model id, or Codex. `:Tutor model math` picks the Σ model |
 | Σ | `␣cm` | `:Tutor math` | **Evaluate / derive** the selection (visual) or current line; asks what you want, answers with steps, a check and LaTeX to insert |
+| ✎ | `␣ct` | `:Tutor draw [photo]` | **Draw a diagram in TikZ** from a description, or from a photo / scan of your hand-drawn sketch; compiled with your header, ready to insert |
 | | `␣cr` | | Resolve / reopen a comment |
 | | `␣cR` | | Reply to a comment (<kbd>Ctrl</kbd>+<kbd>s</kbd> sends) |
 | | `␣cd` | | Delete a comment |
@@ -373,6 +374,7 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | <kbd>A</kbd> | All reviewed questions ↔ just this one |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send a reply |
 | Question menu (top left) | Jump to another exercise |
+| <kbd>T</kbd> or **✎ Draw** | Draw a diagram in TikZ: type a description, or add a sketch with the camera, a file, paste or drag-and-drop |
 | <kbd>P</kbd> or **Progress** | Your progress report, over the PDF (<kbd>Esc</kbd> closes it) |
 | <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>, or the **− 100% +** control | Zoom the PDF in / out / back to fit width |
 | <kbd>Ctrl</kbd>+scroll, or pinch on a trackpad | Zoom around the pointer |
@@ -409,6 +411,46 @@ line N** and **Copy LaTeX** buttons. Otherwise it appears in a float in nvim:
 
 It uses Sonnet by default, which takes about 5–10 s. For harder derivations,
 set `math = { model = "opus" }`. Like reviews, it runs on your subscription.
+
+<br>
+
+## ✎ Draw diagrams in TikZ
+
+Press `␣ct` (or **✎ Draw** in the window) and either **describe** the diagram,
+*"a block on a 30° incline with gravity, normal force and friction"*, or
+**show** it a hand-drawn sketch:
+
+* **📷 Camera**: take a photo with your webcam, right in the window (the
+  browser asks for permission the first time);
+* **🖼 Add image**: a scan (JPEG, PNG or PDF) or a photo you sent over
+  from your phone;
+* **paste** a picture (<kbd>Ctrl</kbd>+<kbd>V</kbd>) or **drag** one in;
+* from nvim: `:Tutor draw ~/Downloads/sketch.jpg`.
+
+You can do both: a sketch plus words like *"the dashed line is the
+equilibrium position"*.
+
+What happens:
+1. The tutor writes TikZ in your document's style: your header's TikZ
+   libraries, `\tikzset` styles, colours and macros, and figures placed the
+   way your document places them.
+2. It is **compiled with your own preamble**. A compile error goes back to the
+   tutor to fix, up to twice.
+3. With a sketch, the tutor **compares its render with your sketch** once and
+   corrects any mismatch: a missing label, an arrow pointing the wrong way.
+4. The window shows **your sketch next to the compiled result**, plus the
+   code. Type a change (*"make the friction arrow dashed"*) and press
+   **Refine**, then **Insert below line N** or **Copy TikZ**.
+
+Insert is one undo step. If the drawing needs a TikZ library your header
+doesn't load, Insert puts `\usetikzlibrary{…}` right above the drawing. It
+never edits your header. Without the window, the code opens in a float in
+nvim: `i` inserts, `r` refines, `y` copies.
+
+Photos are shrunk to 1600 px before they're sent. They, and the previews,
+stay in `~/.cache/latex-tutor/draw/`. A sketch takes about 25–60 s with the
+review model. Like reviews, it runs on your subscription, or with
+`draw = { model = "sonnet" }` for quicker, rougher drawings.
 
 <br>
 
@@ -558,12 +600,13 @@ require("latex-tutor").setup({
     review = "c", review_file = "f", panel = "o", next = "n", prev = "p",
     card = "k", resolve = "r", reply = "R", delete = "d", pdf = "a",
     cancel = "x", prefs = "e", hide = "q", progress = "s", check = "v", gui = "g",
-    math = "m", model = "M",
+    math = "m", model = "M", draw = "t",
   },
 
   backend = "claude",           -- or "codex"; ␣cM switches at runtime
   codex = { cmd = "codex", model = nil, math_model = nil, effort = nil },
   math = { model = "sonnet", effort = nil },   -- Σ evaluate / derive; "opus" for harder ones
+  draw = { model = nil, self_check = true, max_fixes = 2 }, -- ✎ TikZ; nil = the review model
 
   gui = {
     python = "python3",
@@ -596,6 +639,7 @@ Nothing is written next to your `.tex` files.
 | Comments, per file | `~/.local/state/nvim/latex-tutor/*.json` | No |
 | Progress log + report | `~/.local/share/nvim/latex-tutor/progress.{jsonl,md}` | No |
 | Compiled PDFs for the window (on-save and live) | `~/.cache/latex-tutor/build/` | No |
+| Sketches you add and TikZ previews (✎ Draw) | `~/.cache/latex-tutor/draw/` | No |
 | Tutoring preferences | `~/.config/latex-tutor/TUTOR.md` | No |
 | Reply threads | Claude Code's own session history (`~/.claude/`) | No |
 
@@ -685,11 +729,13 @@ lua/latex-tutor/
   pdf.lua       TeXpresso annotation bridge
   progress.lua  private progress log and report
   math.lua      Σ evaluate / derive the selection
+  draw.lua      ✎ TikZ from a description or a sketch: compile, fix, self-check, refine
   models.lua    choosing the AI / model (saved choice)
   codex.lua     OpenAI Codex CLI backend
 gui/
   server.py     local HTTP + SSE server, pdflatex + SyncTeX
   live.py       live preview: warm TeX spares, error-safe swaps
+  draw.py       compiles a TikZ snippet with your preamble, PNG preview
   static/       the window: index.html, app.js, style.css, vendor/
 examples/TUTOR.md
 ```

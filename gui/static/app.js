@@ -604,6 +604,7 @@ function connect() {
   es.addEventListener("state", (e) => apply(JSON.parse(e.data)));
   es.addEventListener("progress", (e) => openReport(JSON.parse(e.data).md));
   es.addEventListener("math", (e) => openMath(JSON.parse(e.data)));
+  es.addEventListener("draw", (e) => drawEvent(JSON.parse(e.data)));
   es.addEventListener("build", () => { if (S.pdf) { S.pdf.building = true; renderStatus(); } });
   es.onerror = () => showStatus("Disconnected — is nvim still running?", "error");
   // nvim quit: close this window. A browser may refuse for a tab it didn't
@@ -623,6 +624,9 @@ $("#btn-review").addEventListener("click", () => post("review"));
 $("#btn-check").addEventListener("click", () => post("check"));
 $("#btn-all").addEventListener("click", () => post("show_all"));
 $("#btn-progress").addEventListener("click", () => post("progress"));
+$("#btn-draw").addEventListener("click", () => openDraw());
+$("#draw-close").addEventListener("click", () => closeDraw());
+$("#drawview").addEventListener("click", (e) => { if (e.target.id === "drawview") closeDraw(); });
 $("#zoom-in").addEventListener("click", () => stepZoom(1));
 $("#zoom-out").addEventListener("click", () => stepZoom(-1));
 $("#zoom-fit").addEventListener("click", () => setZoom(1));
@@ -706,12 +710,207 @@ function closeMath() {
   if ($("#report").hidden) document.body.classList.remove("report-open");
 }
 
+/* ---- ✎ Draw: TikZ from words or a sketch -------------------------------- */
+// nvim runs the tutor and the compile (draw.lua); this panel collects the
+// request (words, a webcam photo, a file, a paste) and shows the result.
+
+let DS = { status: "idle" };      // last state from nvim
+let draft = { text: "", image: null, busy: false, err: "" }; // the request being written
+let view = "form";                // "form" or "result"
+let camStream = null;
+
+const fileUrl = (n) => `/draw-file?n=${encodeURIComponent(n)}`;
+
+function drawEvent(d) {
+  DS = d || { status: "idle" };
+  if (DS.image && DS.status === "idle") draft.image = DS.image;   // :Tutor draw path
+  view = DS.status === "idle" ? "form" : "result";
+  if (d.open || !$("#drawview").hidden) openDraw(true);
+}
+
+function openDraw(keep) {
+  if (!keep) view = DS.status === "idle" || !DS.status ? "form" : "result";
+  $("#drawview").hidden = false;
+  document.body.classList.add("report-open");
+  renderDraw();
+}
+
+function closeDraw() {
+  stopCamera();
+  $("#drawview").hidden = true;
+  if ($("#report").hidden && $("#mathview").hidden) document.body.classList.remove("report-open");
+}
+
+function imgTag(name, alt, cls) {
+  if (!name) return "";
+  return /\.pdf$/i.test(name)
+    ? `<div class="d-pdf ${cls || ""}">📄 ${esc(name)} (PDF scan)</div>`
+    : `<img class="${cls || ""}" src="${fileUrl(name)}" alt="${esc(alt)}">`;
+}
+
+function renderDraw() {
+  const body = $("#draw-body");
+  const sel = document.activeElement && document.activeElement.id;
+  if (view === "form") {
+    body.innerHTML = `
+      <h1>✎ Draw with TikZ</h1>
+      <p class="d-lead">Describe the diagram, or add a photo or scan of your sketch (or both). The tutor writes TikZ in your document's style and compiles it with your header.</p>
+      <textarea id="draw-text" rows="3" placeholder="e.g. a block on a 30° incline with gravity, normal force and friction arrows">${esc(draft.text)}</textarea>
+      <div class="d-row">
+        <button class="btn" id="draw-cam">📷 Camera</button>
+        <label class="btn" id="draw-file-btn">🖼 Add image<input type="file" id="draw-file" accept="image/*,application/pdf" capture="environment" hidden></label>
+        <span class="d-hint">or paste / drop a picture here</span>
+      </div>
+      <div id="draw-camview" class="d-cam" hidden>
+        <video id="draw-video" autoplay playsinline muted></video>
+        <div class="d-row"><button class="btn primary" id="draw-snap">Take photo</button><button class="btn" id="draw-camstop">Cancel</button></div>
+      </div>
+      ${draft.image ? `<div class="d-chosen">${imgTag(draft.image, "your sketch", "d-thumb")}<button class="btn" id="draw-noimg">Remove</button></div>` : ""}
+      ${draft.err ? `<div class="m-caveat">${esc(draft.err)}</div>` : ""}
+      <div class="m-actions">
+        <button class="btn primary" id="draw-go" ${draft.busy ? "disabled" : ""}>${draft.busy ? "Uploading…" : "Draw it"}</button>
+        ${DS.tikz ? `<button class="btn" id="draw-back">Back to the last drawing</button>` : ""}
+        <span class="d-hint">Ctrl+Enter</span>
+      </div>`;
+    const ta = $("#draw-text");
+    ta.addEventListener("input", () => { draft.text = ta.value; });
+    ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); goDraw(); } });
+    $("#draw-go").addEventListener("click", goDraw);
+    $("#draw-cam").addEventListener("click", startCamera);
+    $("#draw-file").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) addImage(f); });
+    if ($("#draw-noimg")) $("#draw-noimg").addEventListener("click", () => { draft.image = null; renderDraw(); });
+    if ($("#draw-back")) $("#draw-back").addEventListener("click", () => { view = "result"; renderDraw(); });
+    if (sel !== "draw-text") setTimeout(() => ta.focus(), 0);
+    return;
+  }
+  const d = DS;
+  const working = d.status === "working";
+  const both = d.image && d.preview;
+  body.innerHTML = `
+    <h1>✎ ${esc(d.summary || (working ? "Drawing…" : "Drawing"))}</h1>
+    ${d.desc ? `<div class="d-ask">“${esc(d.desc)}”</div>` : ""}
+    ${working ? `<div class="d-status"><span class="spin"></span>${esc(d.step || "Working")}…<button class="btn" id="draw-cancel">Cancel</button></div>` : ""}
+    ${d.status === "error" ? `<div class="m-caveat">${esc(d.error || "Something went wrong")}</div>` : ""}
+    <div class="d-compare ${both ? "two" : ""}">
+      ${d.image ? `<figure><figcaption>Your sketch</figcaption>${imgTag(d.image, "your sketch")}</figure>` : ""}
+      ${d.preview ? `<figure><figcaption>${working ? "Current version" : "Compiled with your header"}</figcaption><img class="d-out" src="${fileUrl(d.preview)}" alt="the TikZ drawing"></figure>`
+        : (working ? `<figure class="d-wait"><figcaption>Result</figcaption><div class="d-placeholder">The drawing appears here once it compiles</div></figure>` : "")}
+    </div>
+    ${d.notes ? `<div class="m-caveat">${md(d.notes)}</div>` : ""}
+    ${d.missing ? `<div class="d-note">Uses <code>\\usetikzlibrary{${esc(d.missing.join(","))}}</code>, which your header doesn't load. Insert adds that line right above the drawing.</div>` : ""}
+    ${d.tikz ? `<h2>TikZ</h2><pre class="m-latex">${esc(d.tikz)}</pre>` : ""}
+    ${d.tikz && !working ? `
+      <div class="d-refine">
+        <input id="draw-refine" type="text" placeholder="Change something: “make the friction arrow dashed”, “label the angle θ”">
+        <button class="btn" id="draw-refine-go">Refine</button>
+      </div>
+      <div class="m-actions">
+        <button class="btn primary" id="draw-insert">Insert below line ${d.line || "?"}</button>
+        <button class="btn" id="draw-copy">Copy TikZ</button>
+        <button class="btn" id="draw-new">New drawing</button>
+      </div>` : (!working ? `<div class="m-actions"><button class="btn" id="draw-new">New drawing</button></div>` : "")}`;
+  const on = (id, f) => { const el = $("#" + id); if (el) el.addEventListener("click", f); };
+  on("draw-cancel", () => post("draw_cancel"));
+  on("draw-insert", () => { post("draw_insert"); closeDraw(); });
+  on("draw-copy", async (ev) => {
+    try { await navigator.clipboard.writeText(d.tikz || ""); ev.target.textContent = "Copied"; }
+    catch { ev.target.textContent = "Copy failed: select the code above"; }
+  });
+  on("draw-new", () => { draft = { text: "", image: null, busy: false, err: "" }; view = "form"; renderDraw(); });
+  const rf = $("#draw-refine");
+  const refine = () => { const t = rf.value.trim(); if (t) post("draw_refine", { text: t }); };
+  if (rf) {
+    on("draw-refine-go", refine);
+    rf.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); refine(); } });
+  }
+}
+
+function goDraw() {
+  if (draft.busy) return;
+  const text = (draft.text || "").trim();
+  if (!text && !draft.image) { draft.err = "Describe the diagram or add a picture of it."; renderDraw(); return; }
+  draft.err = "";
+  stopCamera();
+  post("draw", { text, image: draft.image });
+  DS = { status: "working", step: draft.image ? "Reading your sketch" : "Drawing", desc: text, image: draft.image };
+  view = "result";
+  renderDraw();
+}
+
+// Photos are shrunk to 1600 px before upload: plenty for a sketch, and fast.
+async function shrink(blob) {
+  const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
+  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+}
+
+async function addImage(file) {
+  draft.busy = true; draft.err = ""; renderDraw();
+  try {
+    let blob = file;
+    if (/^image\//.test(file.type) && file.type !== "image/gif") blob = await shrink(file);
+    else if (file.type !== "application/pdf" && file.type !== "image/gif") throw new Error("type");
+    const r = await fetch("/upload", { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+    if (!r.ok) throw new Error(await r.text());
+    draft.image = (await r.json()).name;
+  } catch (e) {
+    draft.err = e.message === "type" || /decode|source image/i.test(e.message || "")
+      ? "Can't read that file. Use a JPEG, PNG, WebP or PDF (iPhone HEIC photos: export as JPEG)."
+      : `Upload failed: ${e.message || e}`;
+  }
+  draft.busy = false;
+  renderDraw();
+}
+
+async function startCamera() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } });
+  } catch (e) {
+    draft.err = "No camera available (or permission was denied). You can add an image file instead.";
+    return renderDraw();
+  }
+  $("#draw-camview").hidden = false;
+  const v = $("#draw-video");
+  v.srcObject = camStream;
+  $("#draw-snap").addEventListener("click", async () => {
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+    stopCamera();
+    addImage(blob);
+  });
+  $("#draw-camstop").addEventListener("click", () => { stopCamera(); $("#draw-camview").hidden = true; });
+}
+
+function stopCamera() {
+  if (camStream) camStream.getTracks().forEach((t) => t.stop());
+  camStream = null;
+}
+
+document.addEventListener("paste", (e) => {
+  if ($("#drawview").hidden || view !== "form") return;
+  const item = [...(e.clipboardData || {}).items || []].find((i) => i.kind === "file");
+  if (item) { e.preventDefault(); addImage(item.getAsFile()); }
+});
+$("#drawview").addEventListener("dragover", (e) => { if (view === "form") e.preventDefault(); });
+$("#drawview").addEventListener("drop", (e) => {
+  if (view !== "form") return;
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) addImage(f);
+});
+
 function closeReport() {
   $("#report").hidden = true;
   document.body.classList.remove("report-open");
 }
 
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#drawview").hidden) { closeDraw(); e.preventDefault(); return; }
   if (e.key === "Escape" && !$("#mathview").hidden) { closeMath(); e.preventDefault(); return; }
   if (e.key === "Escape" && !$("#report").hidden) { closeReport(); e.preventDefault(); return; }
   if (e.ctrlKey || e.metaKey) {
@@ -722,7 +921,8 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.target.closest("textarea, input, select")) return;
   if (e.key === "p" || e.key === "P") { post("progress"); e.preventDefault(); return; }
-  if (!$("#report").hidden || !$("#mathview").hidden) return;
+  if (!$("#report").hidden || !$("#mathview").hidden || !$("#drawview").hidden) return;
+  if (e.key === "t" || e.key === "T") { openDraw(); e.preventDefault(); return; }
   const list = S.comments || [];
   const i = list.findIndex((c) => c.id === S.active);
   if (e.key === "j" || e.key === "J") { const c = list[Math.min(list.length - 1, i + 1)]; if (c) activate(c.id, true); }
@@ -769,6 +969,9 @@ if (new URLSearchParams(location.search).has("snapshot")) {
   fetch("/state").then((r) => r.json()).then(apply);
   if (new URLSearchParams(location.search).has("math")) {
     fetch("/math").then((r) => r.json()).then((m) => m.out && openMath(m));
+  }
+  if (new URLSearchParams(location.search).has("draw")) {
+    fetch("/draw").then((r) => r.json()).then((d) => d.status && drawEvent({ ...d, open: true }));
   }
   if (new URLSearchParams(location.search).has("report")) {
     fetch("/progress").then((r) => r.json()).then((d) => d.md && openReport(d.md));

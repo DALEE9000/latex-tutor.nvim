@@ -23,7 +23,8 @@ function M.cancel(key)
 end
 
 -- opts: key, prompt (sent on stdin), system, schema, cwd, resume (session id),
---       model / effort (override the config for this call)
+--       model / effort (override the config for this call),
+--       add_dirs (extra readable folders), images (attached image files)
 -- on_done(err, structured, session_id)
 function M.run(opts, on_done)
   local cfg = config.get()
@@ -48,6 +49,8 @@ function M.run(opts, on_done)
   if model then vim.list_extend(cmd, { "--model", model }) end
   if effort then vim.list_extend(cmd, { "--effort", effort }) end
   if opts.resume then vim.list_extend(cmd, { "--resume", opts.resume }) end
+  -- folders outside the project it may read (Draw: your photo of a sketch)
+  for _, d in ipairs(opts.add_dirs or {}) do vim.list_extend(cmd, { "--add-dir", d }) end
   if opts.system then vim.list_extend(cmd, { "--append-system-prompt", opts.system }) end
 
   local job

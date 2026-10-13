@@ -56,6 +56,7 @@ M.defaults = {
     gui = "g",             -- open the Tutor window (PDF + comment cards)
     math = "m",            -- evaluate / derive the selection (or current line)
     model = "M",           -- choose the AI / model (also :Tutor model)
+    draw = "t",            -- draw a diagram in TikZ, from words or a photo of a sketch
   },
 
   panel = { width = 54, auto_open = true }, -- auto_open is skipped while the GUI window is open
@@ -66,6 +67,9 @@ M.defaults = {
   -- Σ evaluate / derive (Space c m). Sonnet answers in a few seconds; set
   -- model = "opus" for harder derivations.
   math = { model = "sonnet", effort = nil },
+  -- ✎ Draw (Space c t): TikZ from a description or a photo / scan of a sketch.
+  -- model nil = the review model (sketches need its vision and care).
+  draw = { model = nil, self_check = true, max_fixes = 2 },
   gui = {
     python = "python3",
     port = 0,              -- 0 = any free port

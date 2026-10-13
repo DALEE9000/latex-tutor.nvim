@@ -35,6 +35,7 @@
     <button class="zbtn" id="zoom-in" title="Zoom in (Ctrl +)" aria-label="Zoom in">+</button>
   </div>
   <div class="actions">
+    <button class="btn ghost" id="btn-draw" title="Draw a diagram in TikZ, from words or a photo of your sketch (T)" aria-label="Draw">✎<span class="lbl"> Draw</span></button>
     <button class="btn ghost" id="btn-progress" title="Your progress report (P)">Progress</button>
     <button class="btn ghost" id="btn-all" title="Show every reviewed question (A)">All questions</button>
     <button class="btn" id="btn-review" title="Review the question under your cursor">Review</button>
@@ -58,6 +59,13 @@
   <div class="report-card">
     <button class="btn report-close" id="math-close" title="Close (Esc)" aria-label="Close">✕</button>
     <div class="report-body" id="math-body"></div>
+  </div>
+</section>
+
+<section class="report" id="drawview" hidden aria-label="Draw with TikZ">
+  <div class="report-card">
+    <button class="btn report-close" id="draw-close" title="Close (Esc)" aria-label="Close">✕</button>
+    <div class="report-body" id="draw-body"></div>
   </div>
 </section>
 

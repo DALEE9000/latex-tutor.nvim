@@ -13,6 +13,8 @@ The browser window talks to the server over HTTP on 127.0.0.1:
   GET  /events      Server-Sent Events: state + pdf updates
   GET  /pdf         the compiled PDF
   POST /action      a click, forwarded to nvim
+  POST /upload      a sketch photo / scan for Draw (saved in ~/.cache/latex-tutor/draw/)
+  GET  /draw-file   a sketch or TikZ preview from that folder
 
 The PDF is built with pdflatex -synctex=1 into ~/.cache/latex-tutor/build/,
 never next to your .tex files or in build/. SyncTeX maps each comment's
@@ -38,6 +40,10 @@ import live as livebuild  # noqa: E402
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "latex-tutor" / "build"
+DRAW = CACHE.parent / "draw"   # Draw: uploaded sketches and TikZ previews (draw.lua, draw.py)
+UPLOAD_MAX = 25 * 1024 * 1024
+IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+             "application/pdf": ".pdf"}
 
 lock = threading.Lock()
 state = {}            # last state from nvim, plus boxes
@@ -362,6 +368,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, b"GIF89a\x01\x00\x01\x00\x00\x00\x00;", "image/gif")
         if path == "/math":  # the last Σ answer (snapshot mode)
             return self.send(200, json.dumps(last.get("math") or {}).encode(), "application/json")
+        if path == "/draw":  # the last Draw panel state (snapshot mode)
+            return self.send(200, json.dumps(last.get("draw") or {}).encode(), "application/json")
+        if path == "/draw-file":  # a sketch you added, or a TikZ preview
+            m = re.search(r"[?&]n=([\w\-]+\.\w+)", self.path)
+            f = DRAW / m.group(1) if m else None
+            if not f or not f.is_file():
+                return self.send(404, b"not found")
+            ctype = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+                     ".gif": "image/gif", ".pdf": "application/pdf"}.get(f.suffix.lower(), "application/octet-stream")
+            return self.send(200, f.read_bytes(), ctype)
         if path == "/progress":  # the last report nvim sent (snapshot mode)
             return self.send(200, json.dumps({"md": last.get("progress") or ""}).encode(), "application/json")
         if path == "/state":
@@ -382,7 +398,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, f.read_bytes(), TYPES.get(f.suffix, "application/octet-stream"), extra)
 
     def do_POST(self):
-        if self.path != "/action":
+        if self.path not in ("/action", "/upload"):
             return self.send(404)
         # Same-origin only: refuse requests a random web page could forge.
         origin = self.headers.get("Origin")
@@ -390,6 +406,15 @@ class Handler(BaseHTTPRequestHandler):
         if origin and not origin.endswith("//" + host):
             return self.send(403, b"forbidden")
         n = int(self.headers.get("Content-Length", "0") or 0)
+        if self.path == "/upload":  # a photo / scan of a sketch, for Draw
+            ext = IMAGE_EXT.get((self.headers.get("Content-Type") or "").split(";")[0].strip())
+            if not ext or not 0 < n <= UPLOAD_MAX:
+                return self.send(400, b"send a JPEG, PNG, WebP, GIF or PDF under 25 MB")
+            data = self.rfile.read(n)
+            DRAW.mkdir(parents=True, exist_ok=True)
+            name = "upload-" + hashlib.sha1(data).hexdigest()[:12] + ext
+            (DRAW / name).write_bytes(data)
+            return self.send(200, json.dumps({"name": name}).encode(), "application/json")
         try:
             msg = json.loads(self.rfile.read(n) or b"{}")
         except json.JSONDecodeError:
@@ -419,6 +444,10 @@ def read_nvim(engine):
             msg["macros"] = macros_for(msg.get("root"))
             last["math"] = msg
             broadcast("math", msg)
+        elif kind == "draw":
+            msg["macros"] = macros_for(state.get("root"))
+            last["draw"] = msg
+            broadcast("draw", msg)
         elif kind == "progress":
             last["progress"] = msg.get("md") or ""
             broadcast("progress", {"md": last["progress"]})
