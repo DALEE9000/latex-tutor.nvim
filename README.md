@@ -378,12 +378,15 @@ local clone, run `:Lazy reload latex-tutor.nvim`, or restart nvim.
 | Question menu (top left) | Jump to another exercise |
 | <kbd>C</kbd> or **💬 Chat** | Chat about this exercise in a panel beside the PDF. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> is a new line |
 | <kbd>T</kbd> or **✎ Draw** | Draw a diagram in TikZ: type a description, or add a sketch with the camera, a file, paste or drag-and-drop |
+| <kbd>F</kbd> or **◎ Follow** | Turn following your nvim cursor off / on. Off, the view stays where you scrolled it while you move and type |
 | <kbd>P</kbd> or **Progress** | Your progress report, over the PDF (<kbd>Esc</kbd> closes it) |
 | <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>, or the **− 100% +** control | Zoom the PDF in / out / back to fit width |
 | <kbd>Ctrl</kbd>+scroll, or pinch on a trackpad | Zoom around the pointer |
 
 As you type, the window keeps the line you're on in view. It scrolls only
-when that line is off-screen, so it doesn't fight your own scrolling.
+when that line is off-screen, so it doesn't fight your own scrolling. Turn
+**◎ Follow** off (<kbd>F</kbd>) to read another part of the document while you
+type; turning it back on scrolls to your cursor. The choice is remembered.
 
 ### In the terminal sidebar (`␣co`)
 

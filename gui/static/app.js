@@ -498,7 +498,7 @@ function scrollToActive(force) {
   lastScrollKey = key;
   const top = y + margin.offsetTop;
   const view = scroller.scrollTop, h = scroller.clientHeight;
-  if (force || top < view + 40 || top > view + h * 0.7) {
+  if (force || (follow && (top < view + 40 || top > view + h * 0.7))) {
     scroller.scrollTo({ top: Math.max(0, top - h * 0.28) });
   }
 }
@@ -568,11 +568,28 @@ function render() {
 
 // Keeps the line you're typing on in view. It scrolls only when that line is
 // off-screen, and only after you move or type, so it never fights your own
-// scrolling of the window.
+// scrolling of the window. The Follow button (F) turns it off, so the view
+// stays wherever you put it while you move and type in nvim; clicking a comment
+// still jumps to it. Remembered per browser.
+let follow = true;
+try { follow = localStorage.getItem("lt-follow") !== "0"; } catch {}
+function renderFollow() {
+  const b = $("#btn-follow");
+  b.setAttribute("aria-pressed", follow ? "true" : "false");
+  b.title = follow
+    ? "Following your nvim cursor. Click to keep the view where you put it (F)"
+    : "Not following. Click to scroll to your nvim cursor again (F)";
+}
+function setFollow(on) {
+  follow = on;
+  try { localStorage.setItem("lt-follow", on ? "1" : "0"); } catch {}
+  renderFollow();
+  if (on) { lastCursorKey = ""; followCursor(); }  // catch up to the cursor now
+}
 let lastCursorKey = "";
 function followCursor() {
   const b = S.cursor_box;
-  if (!b || !pages[b.page - 1] || !$("#report").hidden) return;
+  if (!follow || !b || !pages[b.page - 1] || !$("#report").hidden) return;
   const key = `${S.cursor}|${docVersion}`;
   if (key === lastCursorKey) return;
   lastCursorKey = key;
@@ -629,6 +646,8 @@ $("#btn-check").addEventListener("click", () => post("check"));
 $("#btn-all").addEventListener("click", () => post("show_all"));
 $("#btn-progress").addEventListener("click", () => post("progress"));
 $("#btn-draw").addEventListener("click", () => openDraw());
+$("#btn-follow").addEventListener("click", () => setFollow(!follow));
+renderFollow();
 $("#btn-chat").addEventListener("click", () => ($("#chatview").hidden ? openChat() : closeChat()));
 $("#chat-close").addEventListener("click", () => closeChat());
 $("#draw-close").addEventListener("click", () => closeDraw());
@@ -1020,6 +1039,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.target.closest("textarea, input, select")) return;
   if (e.key === "p" || e.key === "P") { post("progress"); e.preventDefault(); return; }
+  if (e.key === "f" || e.key === "F") { setFollow(!follow); e.preventDefault(); return; }
   if (!$("#report").hidden || !$("#mathview").hidden || !$("#drawview").hidden) return;
   if (e.key === "t" || e.key === "T") { openDraw(); e.preventDefault(); return; }
   if (e.key === "c" || e.key === "C") { $("#chatview").hidden ? openChat() : $("#chat-text").focus(); e.preventDefault(); return; }
